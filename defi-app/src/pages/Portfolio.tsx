@@ -201,8 +201,19 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                               {pool.project} · {pool.chain}
                             </span>
                           </div>
-                          <div className="text-xs text-slate-500 font-mono mt-1">
-                            {position.poolId.substring(0, 24)}...
+                          <div className="flex items-center gap-2 mt-1">
+                            <a
+                              href={`https://defillama.com/yields/pool/${position.poolId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                            >
+                              View on DefiLlama
+                            </a>
+                            <span className="text-slate-600">·</span>
+                            <span className="text-xs text-slate-500 font-mono">
+                              {position.poolId.substring(0, 16)}...
+                            </span>
                           </div>
                         </div>
                       </div>
