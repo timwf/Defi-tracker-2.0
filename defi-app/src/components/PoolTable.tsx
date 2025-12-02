@@ -80,9 +80,9 @@ export function PoolTable({
   void historicalDataVersion;
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-700">
+    <div className="overflow-auto max-h-[calc(100vh-300px)] rounded-lg border border-slate-700">
       <table className="w-full">
-        <thead className="bg-slate-800 sticky top-0">
+        <thead className="bg-slate-800 sticky top-0 z-10">
           <tr>
             <Header label="" tooltip="Click ↓ to fetch historical data for this pool. Green ✓ = data cached." />
             <SortHeader field="symbol" label="Symbol" tooltip="Pool token symbol. ★ = You hold this position (click star to toggle)." />

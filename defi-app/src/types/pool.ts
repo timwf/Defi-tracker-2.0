@@ -87,6 +87,8 @@ export interface CalculatedMetrics {
 // User's held positions
 export interface HeldPosition {
   poolId: string;
+  amountUsd: number;
   addedAt: number;
+  entryDate?: string; // ISO date string
   notes?: string;
 }
