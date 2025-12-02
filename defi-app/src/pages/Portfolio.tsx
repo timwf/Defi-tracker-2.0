@@ -221,28 +221,28 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
   return (
     <div className="space-y-6">
       {/* Summary Bar */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-slate-800 rounded-lg p-4">
-          <div className="text-sm text-slate-400 mb-1">Total Portfolio Value</div>
-          <div className="text-2xl font-bold text-white">{formatCurrency(totalValue)}</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+        <div className="bg-slate-800 rounded-lg p-3 md:p-4">
+          <div className="text-xs md:text-sm text-slate-400 mb-1">Total Value</div>
+          <div className="text-lg md:text-2xl font-bold text-white">{formatCurrency(totalValue)}</div>
         </div>
-        <div className="bg-slate-800 rounded-lg p-4">
-          <div className="text-sm text-slate-400 mb-1">Weighted APY</div>
-          <div className="text-2xl font-bold text-green-400">{weightedApy.toFixed(2)}%</div>
+        <div className="bg-slate-800 rounded-lg p-3 md:p-4">
+          <div className="text-xs md:text-sm text-slate-400 mb-1">Weighted APY</div>
+          <div className="text-lg md:text-2xl font-bold text-green-400">{weightedApy.toFixed(2)}%</div>
         </div>
-        <div className="bg-slate-800 rounded-lg p-4">
-          <div className="text-sm text-slate-400 mb-1">Projected Annual</div>
-          <div className="text-2xl font-bold text-emerald-400">{formatCurrency(projectedAnnualEarnings)}</div>
+        <div className="bg-slate-800 rounded-lg p-3 md:p-4">
+          <div className="text-xs md:text-sm text-slate-400 mb-1">Annual</div>
+          <div className="text-lg md:text-2xl font-bold text-emerald-400">{formatCurrency(projectedAnnualEarnings)}</div>
         </div>
-        <div className="bg-slate-800 rounded-lg p-4">
-          <div className="text-sm text-slate-400 mb-1">Projected Daily</div>
-          <div className="text-2xl font-bold text-emerald-400">{formatCurrency(projectedDailyEarnings)}</div>
+        <div className="bg-slate-800 rounded-lg p-3 md:p-4">
+          <div className="text-xs md:text-sm text-slate-400 mb-1">Daily</div>
+          <div className="text-lg md:text-2xl font-bold text-emerald-400">{formatCurrency(projectedDailyEarnings)}</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Positions List */}
-        <div className="col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4">
           <h2 className="text-lg font-semibold text-white">Positions ({positionsWithPools.length})</h2>
 
           {positionsWithPools.length === 0 ? (
@@ -261,44 +261,44 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                     key={position.poolId}
                     className={`bg-slate-800 rounded-lg p-4 ${alerts.some(a => a.type === 'danger') ? 'ring-1 ring-red-500/50' : ''}`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-yellow-400 text-xl">★</span>
-                        <div>
-                          <div className="text-white font-medium">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <span className="text-yellow-400 text-lg sm:text-xl">★</span>
+                        <div className="min-w-0">
+                          <div className="text-white font-medium text-sm sm:text-base">
                             {pool.symbol}
-                            <span className="text-slate-400 font-normal ml-2 text-sm">
+                            <span className="text-slate-400 font-normal ml-2 text-xs sm:text-sm">
                               {pool.project} · {pool.chain}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
                             <a
                               href={`https://defillama.com/yields/pool/${position.poolId}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
                             >
-                              View on DefiLlama
+                              DefiLlama
                             </a>
-                            <span className="text-slate-600">·</span>
-                            <span className="text-xs text-slate-500 font-mono">
-                              {position.poolId.substring(0, 16)}...
+                            <span className="text-slate-600 hidden sm:inline">·</span>
+                            <span className="text-xs text-slate-500 font-mono hidden sm:inline">
+                              {position.poolId.substring(0, 12)}...
                             </span>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 ml-6 sm:ml-0">
                         {!isEditing && (
                           <>
                             <button
                               onClick={() => handleStartEdit(position)}
-                              className="text-slate-400 hover:text-blue-400 text-sm px-2 py-1"
+                              className="text-slate-400 hover:text-blue-400 text-xs sm:text-sm px-2 py-1"
                             >
                               Edit
                             </button>
                             <button
                               onClick={() => handleRemove(position.poolId)}
-                              className="text-slate-400 hover:text-red-400 text-sm px-2 py-1"
+                              className="text-slate-400 hover:text-red-400 text-xs sm:text-sm px-2 py-1"
                             >
                               Remove
                             </button>
@@ -309,23 +309,23 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
 
                     {isEditing ? (
                       <div className="mt-3 space-y-3">
-                        <div className="flex gap-3">
-                          <div className="flex-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
                             <label className="text-xs text-slate-400">Amount (USD)</label>
                             <input
                               type="number"
                               value={editAmount}
                               onChange={(e) => setEditAmount(e.target.value)}
-                              className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white"
+                              className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm"
                             />
                           </div>
-                          <div className="flex-1">
+                          <div>
                             <label className="text-xs text-slate-400">Notes</label>
                             <input
                               type="text"
                               value={editNotes}
                               onChange={(e) => setEditNotes(e.target.value)}
-                              className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white"
+                              className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm"
                             />
                           </div>
                         </div>
@@ -364,22 +364,22 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                           </div>
                         )}
 
-                        <div className="mt-3 grid grid-cols-5 gap-4 text-sm">
+                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4 text-sm">
                           <div>
-                            <div className="text-slate-400">Amount</div>
+                            <div className="text-slate-400 text-xs">Amount</div>
                             <div className="text-white font-medium">{formatCurrency(position.amountUsd)}</div>
                           </div>
                           <div>
-                            <div className="text-slate-400">APY</div>
+                            <div className="text-slate-400 text-xs">APY</div>
                             <div className="flex items-center gap-2">
                               <span className="text-green-400 font-medium">{pool.apy.toFixed(2)}%</span>
                               {apyHistory.length >= 2 && (
-                                <Sparkline data={apyHistory} width={50} height={16} />
+                                <Sparkline data={apyHistory} width={40} height={14} />
                               )}
                             </div>
                           </div>
                           <div>
-                            <div className="text-slate-400">TVL</div>
+                            <div className="text-slate-400 text-xs">TVL</div>
                             <div className="flex items-center gap-1">
                               <span className="text-white font-medium">
                                 {pool.tvlUsd >= 1_000_000
@@ -394,16 +394,16 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                             </div>
                           </div>
                           <div>
-                            <div className="text-slate-400">Allocation</div>
+                            <div className="text-slate-400 text-xs">Allocation</div>
                             <div className="text-white font-medium">{allocation.toFixed(1)}%</div>
                           </div>
                           <div>
-                            <div className="text-slate-400">Annual Earnings</div>
+                            <div className="text-slate-400 text-xs">Annual</div>
                             <div className="text-emerald-400 font-medium">{formatCurrency(projectedEarning)}</div>
                           </div>
                           {position.notes && (
-                            <div className="col-span-5">
-                              <div className="text-slate-400">Notes</div>
+                            <div className="col-span-2 sm:col-span-3 md:col-span-5">
+                              <div className="text-slate-400 text-xs">Notes</div>
                               <div className="text-slate-300 text-xs">{position.notes}</div>
                             </div>
                           )}
@@ -419,19 +419,19 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
           {/* Add Position Form */}
           <div className="bg-slate-800 rounded-lg p-4">
             <h3 className="text-md font-medium text-white mb-4">Add Position</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">Pool ID *</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="sm:col-span-2 md:col-span-1">
+                <label className="block text-xs sm:text-sm text-slate-400 mb-1">Pool ID *</label>
                 <input
                   type="text"
                   value={newPoolId}
                   onChange={(e) => { setNewPoolId(e.target.value); setError(''); }}
-                  placeholder="e.g., aa70268e-4b52-42bf-a116..."
+                  placeholder="e.g., aa70268e-4b52..."
                   className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-yellow-500"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Amount (USD) *</label>
+                <label className="block text-xs sm:text-sm text-slate-400 mb-1">Amount (USD) *</label>
                 <input
                   type="number"
                   value={newAmount}
@@ -441,7 +441,7 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Entry Date (optional)</label>
+                <label className="block text-xs sm:text-sm text-slate-400 mb-1">Entry Date</label>
                 <input
                   type="date"
                   value={newEntryDate}
@@ -450,7 +450,7 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Notes (optional)</label>
+                <label className="block text-xs sm:text-sm text-slate-400 mb-1">Notes</label>
                 <input
                   type="text"
                   value={newNotes}
@@ -465,7 +465,7 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
             )}
             <button
               onClick={handleAdd}
-              className="mt-4 px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-500 font-medium"
+              className="mt-4 w-full sm:w-auto px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-500 font-medium"
             >
               Add Position
             </button>
