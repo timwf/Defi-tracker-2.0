@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
-import type { Pool, HeldPosition } from '../types/pool';
+import type { Pool, HeldPosition, CalculatedMetrics } from '../types/pool';
 import { addHeldPosition, removeHeldPosition, updatePosition, type AddPositionParams } from '../utils/heldPositions';
+import { getCachedData, getPoolMetrics } from '../utils/historicalData';
+import { Sparkline } from '../components/Sparkline';
 
 interface PortfolioProps {
   positions: HeldPosition[];
@@ -11,6 +13,14 @@ interface PortfolioProps {
 interface PositionWithPool {
   position: HeldPosition;
   pool: Pool;
+  metrics: CalculatedMetrics | null;
+  apyHistory: number[];
+  alerts: PositionAlert[];
+}
+
+interface PositionAlert {
+  type: 'warning' | 'danger';
+  message: string;
 }
 
 export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProps) {
@@ -23,12 +33,72 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
   const [editAmount, setEditAmount] = useState('');
   const [editNotes, setEditNotes] = useState('');
 
-  // Get positions with pool info
+  // Get positions with pool info, metrics, and alerts
   const positionsWithPools = useMemo<PositionWithPool[]>(() => {
     return positions
       .map(pos => {
         const pool = pools.find(p => p.pool === pos.poolId);
-        return pool ? { position: pos, pool } : null;
+        if (!pool) return null;
+
+        const metrics = getPoolMetrics(pos.poolId);
+        const cached = getCachedData(pos.poolId);
+
+        // Get last 30 days of APY for sparkline
+        const apyHistory: number[] = [];
+        if (cached?.data) {
+          const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          const recentData = cached.data.filter(d => new Date(d.timestamp).getTime() >= thirtyDaysAgo);
+          apyHistory.push(...recentData.map(d => d.apy));
+        }
+
+        // Generate alerts
+        const alerts: PositionAlert[] = [];
+
+        if (metrics) {
+          // APY dropped significantly from 30d average
+          if (metrics.base90 > 0 && pool.apy < metrics.base90 * 0.5) {
+            alerts.push({
+              type: 'danger',
+              message: `APY dropped ${((1 - pool.apy / metrics.base90) * 100).toFixed(0)}% from 90d avg`
+            });
+          } else if (metrics.base90 > 0 && pool.apy < metrics.base90 * 0.75) {
+            alerts.push({
+              type: 'warning',
+              message: `APY down ${((1 - pool.apy / metrics.base90) * 100).toFixed(0)}% from 90d avg`
+            });
+          }
+
+          // TVL dropped significantly
+          if (metrics.tvlChange30d < -30) {
+            alerts.push({
+              type: 'danger',
+              message: `TVL down ${Math.abs(metrics.tvlChange30d).toFixed(0)}% in 30d`
+            });
+          } else if (metrics.tvlChange30d < -15) {
+            alerts.push({
+              type: 'warning',
+              message: `TVL down ${Math.abs(metrics.tvlChange30d).toFixed(0)}% in 30d`
+            });
+          }
+
+          // Low organic yield
+          if (metrics.organicPct < 30) {
+            alerts.push({
+              type: 'warning',
+              message: `Only ${metrics.organicPct}% organic yield`
+            });
+          }
+
+          // High volatility
+          if (metrics.volatility > 5) {
+            alerts.push({
+              type: 'warning',
+              message: `High APY volatility (${metrics.volatility.toFixed(1)})`
+            });
+          }
+        }
+
+        return { position: pos, pool, metrics, apyHistory, alerts };
       })
       .filter((x): x is PositionWithPool => x !== null);
   }, [positions, pools]);
@@ -120,10 +190,10 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
     onPositionsChange(removeHeldPosition(poolId));
   };
 
-  const handleStartEdit = (pos: PositionWithPool) => {
-    setEditingId(pos.position.poolId);
-    setEditAmount(pos.position.amountUsd.toString());
-    setEditNotes(pos.position.notes || '');
+  const handleStartEdit = (position: HeldPosition) => {
+    setEditingId(position.poolId);
+    setEditAmount(position.amountUsd.toString());
+    setEditNotes(position.notes || '');
   };
 
   const handleSaveEdit = () => {
@@ -181,7 +251,7 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
             </div>
           ) : (
             <div className="space-y-3">
-              {positionsWithPools.map(({ position, pool }) => {
+              {positionsWithPools.map(({ position, pool, metrics, apyHistory, alerts }) => {
                 const allocation = totalValue > 0 ? (position.amountUsd / totalValue) * 100 : 0;
                 const projectedEarning = position.amountUsd * (pool.apy / 100);
                 const isEditing = editingId === position.poolId;
@@ -189,7 +259,7 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                 return (
                   <div
                     key={position.poolId}
-                    className="bg-slate-800 rounded-lg p-4"
+                    className={`bg-slate-800 rounded-lg p-4 ${alerts.some(a => a.type === 'danger') ? 'ring-1 ring-red-500/50' : ''}`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
@@ -221,7 +291,7 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                         {!isEditing && (
                           <>
                             <button
-                              onClick={() => handleStartEdit({ position, pool })}
+                              onClick={() => handleStartEdit(position)}
                               className="text-slate-400 hover:text-blue-400 text-sm px-2 py-1"
                             >
                               Edit
@@ -275,30 +345,70 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-3 grid grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <div className="text-slate-400">Amount</div>
-                          <div className="text-white font-medium">{formatCurrency(position.amountUsd)}</div>
-                        </div>
-                        <div>
-                          <div className="text-slate-400">APY</div>
-                          <div className="text-green-400 font-medium">{pool.apy.toFixed(2)}%</div>
-                        </div>
-                        <div>
-                          <div className="text-slate-400">Allocation</div>
-                          <div className="text-white font-medium">{allocation.toFixed(1)}%</div>
-                        </div>
-                        <div>
-                          <div className="text-slate-400">Annual Earnings</div>
-                          <div className="text-emerald-400 font-medium">{formatCurrency(projectedEarning)}</div>
-                        </div>
-                        {position.notes && (
-                          <div className="col-span-4">
-                            <div className="text-slate-400">Notes</div>
-                            <div className="text-slate-300 text-xs">{position.notes}</div>
+                      <>
+                        {/* Alerts */}
+                        {alerts.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {alerts.map((alert, i) => (
+                              <span
+                                key={i}
+                                className={`text-xs px-2 py-1 rounded ${
+                                  alert.type === 'danger'
+                                    ? 'bg-red-900/50 text-red-300'
+                                    : 'bg-yellow-900/50 text-yellow-300'
+                                }`}
+                              >
+                                {alert.type === 'danger' ? '!' : '⚠'} {alert.message}
+                              </span>
+                            ))}
                           </div>
                         )}
-                      </div>
+
+                        <div className="mt-3 grid grid-cols-5 gap-4 text-sm">
+                          <div>
+                            <div className="text-slate-400">Amount</div>
+                            <div className="text-white font-medium">{formatCurrency(position.amountUsd)}</div>
+                          </div>
+                          <div>
+                            <div className="text-slate-400">APY</div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-400 font-medium">{pool.apy.toFixed(2)}%</span>
+                              {apyHistory.length >= 2 && (
+                                <Sparkline data={apyHistory} width={50} height={16} />
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-slate-400">TVL</div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-white font-medium">
+                                {pool.tvlUsd >= 1_000_000
+                                  ? `$${(pool.tvlUsd / 1_000_000).toFixed(1)}M`
+                                  : `$${(pool.tvlUsd / 1_000).toFixed(0)}K`}
+                              </span>
+                              {metrics && (
+                                <span className={`text-xs ${metrics.tvlChange30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {metrics.tvlChange30d >= 0 ? '+' : ''}{metrics.tvlChange30d.toFixed(0)}%
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-slate-400">Allocation</div>
+                            <div className="text-white font-medium">{allocation.toFixed(1)}%</div>
+                          </div>
+                          <div>
+                            <div className="text-slate-400">Annual Earnings</div>
+                            <div className="text-emerald-400 font-medium">{formatCurrency(projectedEarning)}</div>
+                          </div>
+                          {position.notes && (
+                            <div className="col-span-5">
+                              <div className="text-slate-400">Notes</div>
+                              <div className="text-slate-300 text-xs">{position.notes}</div>
+                            </div>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 );
