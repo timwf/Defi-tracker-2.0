@@ -103,5 +103,5 @@ export function formatPrediction(predictions: { predictedClass: string; predicte
   let color = 'text-slate-400';
   if (predictedClass.includes('Up')) color = 'text-green-400';
   if (predictedClass.includes('Down')) color = 'text-red-400';
-  return { text: `${predictedClass} (${predictedProbability}%)`, color };
+  return { text: `${predictedClass} (${predictedProbability.toFixed(2)}%)`, color };
 }
