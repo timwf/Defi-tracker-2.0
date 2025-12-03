@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import type { Pool, PoolsResponse, Filters, SortField, SortDirection, SavedView, HeldPosition } from './types/pool';
 import type { FetchProgress } from './utils/historicalData';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -34,7 +34,6 @@ const DEFAULT_FILTERS: Filters = {
 
 function AppContent() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [pools, setPools] = useState<Pool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -115,12 +114,6 @@ function AppContent() {
   }
 
   const handleSaveView = async (name: string) => {
-    // Require login to save views
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
     const view: SavedView = {
       name,
       filters,
@@ -146,12 +139,6 @@ function AppContent() {
   };
 
   const handleToggleHeld = useCallback(async (poolId: string, isCurrentlyHeld: boolean) => {
-    // Require login to add/remove positions
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
     // Save scroll position before state changes
     const scrollY = window.scrollY;
 
@@ -182,7 +169,7 @@ function AppContent() {
       html.style.scrollBehavior = '';
       window.scrollTo(0, scrollY);
     });
-  }, [user, navigate]);
+  }, []);
 
   const handlePositionsChange = useCallback(async (positions: HeldPosition[]) => {
     // This is called from Portfolio page with full positions array
