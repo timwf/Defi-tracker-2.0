@@ -121,10 +121,8 @@ export function PoolTable({
             <div className="text-purple-400">{formatApy(pool.apyReward)}</div>
           </div>
           <div>
-            <div className="text-slate-500">Stable</div>
-            <div className={pool.stablecoin ? 'text-green-400' : 'text-slate-500'}>
-              {pool.stablecoin ? 'Yes' : 'No'}
-            </div>
+            <div className="text-slate-500">1D</div>
+            <div className={formatChange(pool.apyPct1D).color}>{formatChange(pool.apyPct1D).text}</div>
           </div>
           <div>
             <div className="text-slate-500">7D</div>
@@ -132,11 +130,34 @@ export function PoolTable({
           </div>
         </div>
 
+        <div className="grid grid-cols-4 gap-2 mt-2 text-xs border-t border-slate-700 pt-2">
+          <div>
+            <div className="text-slate-500">σ</div>
+            <div className={formatSigma(pool.sigma).color}>{formatSigma(pool.sigma).text}</div>
+          </div>
+          <div>
+            <div className="text-slate-500">Stable</div>
+            <div className={pool.stablecoin ? 'text-green-400' : 'text-slate-500'}>
+              {pool.stablecoin ? 'Yes' : 'No'}
+            </div>
+          </div>
+          <div className="col-span-2">
+            <div className="text-slate-500">Prediction</div>
+            <div className={formatPrediction(pool.predictions).color}>
+              {formatPrediction(pool.predictions).text}
+            </div>
+          </div>
+        </div>
+
         {metrics && (
-          <div className="grid grid-cols-4 gap-2 mt-2 text-xs border-t border-slate-700 pt-2">
+          <div className="grid grid-cols-5 gap-2 mt-2 text-xs border-t border-slate-700 pt-2">
             <div>
               <div className="text-slate-500">Base90</div>
               <div className="text-cyan-400">{metrics.base90.toFixed(1)}%</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Days</div>
+              <div className="text-slate-400">{metrics.dataPoints}</div>
             </div>
             <div>
               <div className="text-slate-500">Vol</div>
