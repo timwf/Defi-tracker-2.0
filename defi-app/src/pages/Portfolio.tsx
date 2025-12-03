@@ -17,6 +17,7 @@ interface PositionWithPool {
   pool: Pool;
   metrics: CalculatedMetrics | null;
   apyHistory: number[];
+  yesterdayApy: number | null;
   alerts: PositionAlert[];
 }
 
@@ -48,10 +49,16 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
         // Get last 30 days of APY for sparkline
         const apyHistory: number[] = [];
-        if (cached?.data) {
+        let yesterdayApy: number | null = null;
+        if (cached?.data && cached.data.length > 0) {
           const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
           const recentData = cached.data.filter(d => new Date(d.timestamp).getTime() >= thirtyDaysAgo);
           apyHistory.push(...recentData.map(d => d.apy));
+
+          // Get yesterday's APY (second to last entry, as last is today)
+          if (cached.data.length >= 2) {
+            yesterdayApy = cached.data[cached.data.length - 2].apy;
+          }
         }
 
         // Generate alerts
@@ -101,7 +108,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
           }
         }
 
-        return { position: pos, pool, metrics, apyHistory, alerts };
+        return { position: pos, pool, metrics, apyHistory, yesterdayApy, alerts };
       })
       .filter((x): x is PositionWithPool => x !== null);
   }, [positions, pools]);
@@ -292,7 +299,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
             </div>
           ) : (
             <div className="space-y-3">
-              {positionsWithPools.map(({ position, pool, metrics, apyHistory, alerts }) => {
+              {positionsWithPools.map(({ position, pool, metrics, apyHistory, yesterdayApy, alerts }) => {
                 const allocation = totalValue > 0 ? (position.amountUsd / totalValue) * 100 : 0;
                 const projectedEarning = position.amountUsd * (pool.apy / 100);
                 const isEditing = editingId === position.poolId;
@@ -429,7 +436,15 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                               APY
                               <MetricInfo metric="apy" value={pool.apy} pool={pool} metrics={metrics ?? undefined} />
                             </div>
-                            <div className="text-green-400 font-medium">{pool.apy.toFixed(2)}%</div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-green-400 font-medium">{pool.apy.toFixed(2)}%</span>
+                              {yesterdayApy !== null && (
+                                <span className={`text-xs ${pool.apy >= yesterdayApy ? 'text-green-400' : 'text-red-400'}`}>
+                                  {pool.apy >= yesterdayApy ? '↑' : '↓'}
+                                  {Math.abs(pool.apy - yesterdayApy).toFixed(2)}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <div className="group">
                             <div className="text-slate-400 text-xs flex items-center">
