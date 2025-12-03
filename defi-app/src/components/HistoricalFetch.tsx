@@ -114,8 +114,8 @@ export function HistoricalFetch({
     }
   };
 
-  // Only estimate time for uncached pools (3 parallel + 300ms between batches)
-  const estimatedSeconds = Math.ceil(needsFetching / 3) * 0.6; // ~0.6s per batch of 3
+  // Estimate time: 1.5 seconds per pool (sequential)
+  const estimatedSeconds = needsFetching * 1.5;
   const estimatedTime = Math.ceil(estimatedSeconds / 60);
 
   return (

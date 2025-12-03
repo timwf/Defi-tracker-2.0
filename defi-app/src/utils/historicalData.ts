@@ -152,51 +152,40 @@ export interface FetchProgress {
 export async function fetchMultiplePoolsHistory(
   poolIds: string[],
   onProgress: (progress: FetchProgress) => void,
-  batchSize = 3,
+  _batchSize = 1, // Ignored - always sequential now
   forceRefresh = false,
   signal?: AbortSignal
 ): Promise<Map<string, HistoricalDataPoint[]>> {
   const results = new Map<string, HistoricalDataPoint[]>();
-  let completed = 0;
 
-  // Process in batches for parallel fetching
-  for (let i = 0; i < poolIds.length; i += batchSize) {
+  // Process one at a time with delay to avoid rate limits
+  for (let i = 0; i < poolIds.length; i++) {
     if (signal?.aborted) break;
 
-    const batch = poolIds.slice(i, i + batchSize);
+    const poolId = poolIds[i];
 
-    // Process batch in parallel
-    const batchPromises = batch.map(async (poolId) => {
-      if (signal?.aborted) return;
-
-      try {
-        // Check cache first
-        if (!forceRefresh && isCacheValid(poolId)) {
-          const cached = getCachedData(poolId);
-          results.set(poolId, cached?.data || []);
-          completed++;
-          onProgress({ current: completed, total: poolIds.length, poolId, status: 'cached' });
-        } else {
-          const data = await fetchPoolHistory(poolId);
-          saveToCache(poolId, data);
-          results.set(poolId, data);
-          completed++;
-          onProgress({ current: completed, total: poolIds.length, poolId, status: 'fetching' });
-        }
-      } catch (error) {
-        console.error(`Failed to fetch ${poolId}:`, error);
-        completed++;
-        onProgress({ current: completed, total: poolIds.length, poolId, status: 'error' });
-        results.set(poolId, []);
+    try {
+      // Check cache first
+      if (!forceRefresh && isCacheValid(poolId)) {
+        const cached = getCachedData(poolId);
+        results.set(poolId, cached?.data || []);
+        onProgress({ current: i + 1, total: poolIds.length, poolId, status: 'cached' });
+      } else {
+        const data = await fetchPoolHistory(poolId);
+        saveToCache(poolId, data);
+        results.set(poolId, data);
+        onProgress({ current: i + 1, total: poolIds.length, poolId, status: 'fetching' });
       }
-    });
+    } catch (error) {
+      console.error(`Failed to fetch ${poolId}:`, error);
+      onProgress({ current: i + 1, total: poolIds.length, poolId, status: 'error' });
+      results.set(poolId, []);
+    }
 
-    await Promise.all(batchPromises);
-
-    // Delay between batches to avoid CORS/rate limit issues
-    if (i + batchSize < poolIds.length && !signal?.aborted) {
+    // Delay between requests to avoid rate limits (1.5 seconds)
+    if (i < poolIds.length - 1 && !signal?.aborted) {
       await new Promise((resolve) => {
-        const timeout = setTimeout(resolve, 300);
+        const timeout = setTimeout(resolve, 1500);
         signal?.addEventListener('abort', () => {
           clearTimeout(timeout);
           resolve(undefined);
