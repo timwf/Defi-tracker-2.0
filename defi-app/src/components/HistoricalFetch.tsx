@@ -59,20 +59,17 @@ export function HistoricalFetch({
 
   return (
     <div className="bg-slate-800 p-3 rounded-lg mb-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3 sm:gap-4">
           <span className="text-sm text-slate-300">
-            Historical Data
+            Historical
           </span>
           <span className="text-xs text-slate-500">
-            {cacheStats.valid} pools cached
+            {cacheStats.valid} cached
           </span>
-        </div>
-
-        <div className="flex items-center gap-3">
           {isFetching && progress && (
             <div className="flex items-center gap-2">
-              <div className="w-32 bg-slate-700 rounded-full h-2">
+              <div className="w-20 sm:w-32 bg-slate-700 rounded-full h-2">
                 <div
                   className="bg-blue-500 h-2 rounded-full transition-all"
                   style={{ width: `${(progress.current / progress.total) * 100}%` }}
@@ -80,41 +77,41 @@ export function HistoricalFetch({
               </div>
               <span className="text-xs text-slate-400">
                 {progress.current}/{progress.total}
-                {progress.status === 'cached' && ' (cached)'}
               </span>
             </div>
           )}
+        </div>
 
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <button
             onClick={handleFetchVisible}
             disabled={isFetching || visiblePoolIds.length === 0}
-            className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm bg-purple-600 text-white rounded hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 sm:gap-2"
           >
             {isFetching ? (
-              <>
-                <span className="animate-spin">...</span>
-                Fetching...
-              </>
+              'Fetching...'
             ) : (
               <>
-                Fetch Historical ({visiblePoolIds.length} pools)
+                <span className="hidden sm:inline">Fetch Historical</span>
+                <span className="sm:hidden">Fetch</span>
+                <span>({visiblePoolIds.length})</span>
               </>
             )}
           </button>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center">
             <button
               onClick={handleExportCopy}
               disabled={visiblePools.length === 0}
-              className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-l hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm bg-green-600 text-white rounded-l hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
               title="Copy JSON to clipboard for AI analysis"
             >
-              {copied ? 'Copied!' : 'Export for AI'}
+              {copied ? 'Copied!' : <><span className="hidden sm:inline">Export</span><span className="sm:hidden">Copy</span></>}
             </button>
             <button
               onClick={handleExportDownload}
               disabled={visiblePools.length === 0}
-              className="px-2 py-1.5 text-sm bg-green-700 text-white rounded-r hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-2 py-1.5 text-xs sm:text-sm bg-green-700 text-white rounded-r hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
               title="Download as JSON file"
             >
               ↓
@@ -124,8 +121,8 @@ export function HistoricalFetch({
       </div>
 
       {!isFetching && visiblePoolIds.length > 10 && (
-        <p className="text-xs text-slate-500 mt-2">
-          Est. time: ~{estimatedTime} min (1.5s delay per request to avoid rate limits)
+        <p className="text-xs text-slate-500 mt-2 hidden sm:block">
+          Est. time: ~{estimatedTime} min (1.5s delay per request)
         </p>
       )}
     </div>

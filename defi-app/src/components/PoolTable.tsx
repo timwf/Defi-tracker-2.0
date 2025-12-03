@@ -79,8 +79,127 @@ export function PoolTable({
   // Force re-render when historicalDataVersion changes
   void historicalDataVersion;
 
+  // Mobile card view component
+  const MobilePoolCard = ({ pool }: { pool: Pool }) => {
+    const metrics: CalculatedMetrics | null = getPoolMetrics(pool.pool);
+    const hasHistoricalData = getCachedData(pool.pool) !== null;
+    const isFetching = fetchingPoolId === pool.pool;
+    const isHeld = heldPoolIds.includes(pool.pool);
+
+    return (
+      <div className={`bg-slate-800 rounded-lg p-3 ${isHeld ? 'ring-1 ring-yellow-500/50' : ''}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              {onToggleHeld && (
+                <button
+                  onClick={() => onToggleHeld(pool.pool, isHeld)}
+                  className={`text-lg ${isHeld ? 'text-yellow-400' : 'text-slate-600'}`}
+                >
+                  ★
+                </button>
+              )}
+              <span className="text-white font-medium truncate">{pool.symbol}</span>
+            </div>
+            <div className="text-xs text-slate-400 mt-0.5">
+              {pool.project} · {pool.chain}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-green-400 font-bold">{formatApy(pool.apy)}</div>
+            <div className="text-xs text-slate-400">{formatTvl(pool.tvlUsd)}</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
+          <div>
+            <div className="text-slate-500">Base</div>
+            <div className="text-slate-300">{formatApy(pool.apyBase)}</div>
+          </div>
+          <div>
+            <div className="text-slate-500">Reward</div>
+            <div className="text-purple-400">{formatApy(pool.apyReward)}</div>
+          </div>
+          <div>
+            <div className="text-slate-500">Stable</div>
+            <div className={pool.stablecoin ? 'text-green-400' : 'text-slate-500'}>
+              {pool.stablecoin ? 'Yes' : 'No'}
+            </div>
+          </div>
+          <div>
+            <div className="text-slate-500">7D</div>
+            <div className={formatChange(pool.apyPct7D).color}>{formatChange(pool.apyPct7D).text}</div>
+          </div>
+        </div>
+
+        {metrics && (
+          <div className="grid grid-cols-4 gap-2 mt-2 text-xs border-t border-slate-700 pt-2">
+            <div>
+              <div className="text-slate-500">Base90</div>
+              <div className="text-cyan-400">{metrics.base90.toFixed(1)}%</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Vol</div>
+              <div className={getVolatilityColor(metrics.volatility)}>{metrics.volatility.toFixed(1)}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Org%</div>
+              <div className={getOrganicColor(metrics.organicPct)}>{metrics.organicPct}%</div>
+            </div>
+            <div>
+              <div className="text-slate-500">TVL Δ</div>
+              <div className={getTvlFlowColor(metrics.tvlChange30d)}>
+                {metrics.tvlChange30d >= 0 ? '+' : ''}{metrics.tvlChange30d}%
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-700">
+          <div className="flex items-center gap-2">
+            {onFetchSinglePool && (
+              <button
+                onClick={() => onFetchSinglePool(pool.pool)}
+                disabled={isFetching}
+                className={`px-2 py-1 rounded text-xs ${
+                  isFetching
+                    ? 'bg-purple-600 text-white'
+                    : hasHistoricalData
+                    ? 'bg-green-900/50 text-green-400'
+                    : 'bg-slate-700 text-slate-400'
+                }`}
+              >
+                {isFetching ? '...' : hasHistoricalData ? '✓ Data' : '↓ Fetch'}
+              </button>
+            )}
+          </div>
+          <a
+            href={`https://defillama.com/yields/pool/${pool.pool}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-400 hover:underline"
+          >
+            DefiLlama →
+          </a>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="overflow-auto max-h-[calc(100vh-300px)] rounded-lg border border-slate-700">
+    <>
+      {/* Mobile card view */}
+      <div className="md:hidden space-y-3">
+        {pools.map((pool) => (
+          <MobilePoolCard key={pool.pool} pool={pool} />
+        ))}
+        {pools.length === 0 && (
+          <div className="text-center py-8 text-slate-400">No pools match your filters</div>
+        )}
+      </div>
+
+      {/* Desktop table view */}
+      <div className="hidden md:block overflow-auto max-h-[calc(100vh-300px)] rounded-lg border border-slate-700">
       <table className="w-full">
         <thead className="bg-slate-800 sticky top-0 z-10">
           <tr>
@@ -224,6 +343,7 @@ export function PoolTable({
       {pools.length === 0 && (
         <div className="text-center py-8 text-slate-400">No pools match your filters</div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

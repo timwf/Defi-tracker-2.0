@@ -27,7 +27,7 @@ export function SavedViews({ views, onLoadView, onSaveView, onDeleteView }: Save
 
   return (
     <div className="bg-slate-800 p-3 rounded-lg mb-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="text-sm font-medium text-slate-300 hover:text-white flex items-center gap-2"
@@ -43,14 +43,14 @@ export function SavedViews({ views, onLoadView, onSaveView, onDeleteView }: Save
             onChange={(e) => setNewViewName(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="View name..."
-            className="px-2 py-1 text-sm bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 w-32"
+            className="px-2 py-1 text-sm bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 w-28 sm:w-32"
           />
           <button
             onClick={handleSave}
             disabled={!newViewName.trim()}
-            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
-            Save View
+            Save
           </button>
         </div>
       </div>

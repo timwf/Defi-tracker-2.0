@@ -31,24 +31,24 @@ export function FiltersPanel({
   };
 
   return (
-    <div className="bg-slate-800 p-4 rounded-lg mb-4 space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="bg-slate-800 p-3 sm:p-4 rounded-lg mb-4 space-y-3 sm:space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {/* Search */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-1">Search Symbol</label>
+        <div className="col-span-2 md:col-span-1">
+          <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1">Search</label>
           <input
             type="text"
             value={filters.search}
             onChange={(e) => updateFilter('search', e.target.value)}
             placeholder="e.g. USDC"
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 bg-slate-700 border border-slate-600 rounded-md text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
         {/* TVL Min */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-1">
-            Min TVL: ${(filters.tvlMin / 1_000_000).toFixed(1)}M
+          <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1">
+            TVL: ${(filters.tvlMin / 1_000_000).toFixed(1)}M+
           </label>
           <input
             type="range"
@@ -63,23 +63,23 @@ export function FiltersPanel({
 
         {/* APY Range */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-1">
-            APY: {filters.apyMin}% - {filters.apyMax}%
+          <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1">
+            APY: {filters.apyMin}-{filters.apyMax}%
           </label>
-          <div className="flex gap-2">
+          <div className="flex gap-1 sm:gap-2">
             <input
               type="number"
               value={filters.apyMin}
               onChange={(e) => updateFilter('apyMin', Number(e.target.value))}
               placeholder="Min"
-              className="w-1/2 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+              className="w-1/2 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs sm:text-sm"
             />
             <input
               type="number"
               value={filters.apyMax}
               onChange={(e) => updateFilter('apyMax', Number(e.target.value))}
               placeholder="Max"
-              className="w-1/2 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+              className="w-1/2 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs sm:text-sm"
             />
           </div>
         </div>
@@ -93,7 +93,7 @@ export function FiltersPanel({
               onChange={(e) => updateFilter('stablecoinOnly', e.target.checked)}
               className="mr-2 w-4 h-4"
             />
-            <span className="text-sm text-slate-300">Stablecoins only</span>
+            <span className="text-xs sm:text-sm text-slate-300">Stables only</span>
           </label>
         </div>
       </div>
