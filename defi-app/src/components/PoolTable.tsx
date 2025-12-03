@@ -116,7 +116,11 @@ export function PoolTable({
             <div className="flex items-center gap-2">
               {onToggleHeld && (
                 <button
-                  onClick={() => onToggleHeld(pool.pool, isHeld)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleHeld(pool.pool, isHeld);
+                  }}
                   className={`text-lg cursor-pointer transition-all hover:scale-110 ${isHeld ? 'text-yellow-400 hover:text-yellow-300' : 'text-slate-500 hover:text-yellow-400'}`}
                   title={isHeld ? 'Remove from portfolio' : 'Add to portfolio'}
                 >
@@ -415,7 +419,11 @@ export function PoolTable({
                   <div className="flex items-center gap-1.5">
                     {onToggleHeld && (
                       <button
-                        onClick={() => onToggleHeld(pool.pool, isHeld)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onToggleHeld(pool.pool, isHeld);
+                        }}
                         className={`text-base cursor-pointer transition-all hover:scale-110 ${isHeld ? 'text-yellow-400 hover:text-yellow-300' : 'text-slate-500 hover:text-yellow-400'}`}
                         title={isHeld ? 'Remove from portfolio' : 'Add to portfolio'}
                       >
