@@ -23,7 +23,7 @@ export function NavHeader({ poolCount, lastUpdated, onRefresh, loading, position
   const { user, signOut } = useAuth();
 
   return (
-    <header className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <header className="sticky top-0 z-50 bg-slate-900 -mx-4 px-4 py-3 mb-4 sm:mb-6 sm:static sm:mx-0 sm:px-0 sm:py-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-white">DeFi Yield Tracker</h1>
         <div className="flex items-center gap-2 text-xs sm:text-sm">
