@@ -4,7 +4,6 @@ import type { Pool, PoolsResponse, Filters, SortField, SortDirection, SavedView,
 import type { FetchProgress } from './utils/historicalData';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NavHeader } from './components/NavHeader';
-import { ProtectedRoute } from './components/ProtectedRoute';
 import { PoolsPage } from './pages/Pools';
 import { Portfolio } from './pages/Portfolio';
 import { Login } from './pages/Login';
@@ -250,14 +249,12 @@ function AppContent() {
           <Route
             path="/portfolio"
             element={
-              <ProtectedRoute>
-                <Portfolio
-                  positions={heldPositions}
-                  pools={pools}
-                  onPositionsChange={handlePositionsChange}
-                  onRefreshPositions={refreshPositions}
-                />
-              </ProtectedRoute>
+              <Portfolio
+                positions={heldPositions}
+                pools={pools}
+                onPositionsChange={handlePositionsChange}
+                onRefreshPositions={refreshPositions}
+              />
             }
           />
         </Routes>
