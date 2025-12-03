@@ -176,7 +176,7 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-slate-900 p-4">
       <div className="max-w-[1800px] mx-auto">
-        <NavHeader poolCount={pools.length} lastUpdated={lastUpdated} onRefresh={fetchPools} loading={loading} />
+        <NavHeader poolCount={pools.length} lastUpdated={lastUpdated} onRefresh={fetchPools} loading={loading} positionCount={heldPositions.length} />
 
         {migrationMessage && (
           <div className="bg-green-900/50 border border-green-500 text-green-200 px-4 py-3 rounded mb-4">

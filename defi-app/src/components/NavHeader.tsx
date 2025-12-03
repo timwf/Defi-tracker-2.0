@@ -6,6 +6,7 @@ interface NavHeaderProps {
   lastUpdated: number | null;
   onRefresh: () => void;
   loading: boolean;
+  positionCount?: number;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -18,7 +19,7 @@ function formatTimeAgo(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString();
 }
 
-export function NavHeader({ poolCount, lastUpdated, onRefresh, loading }: NavHeaderProps) {
+export function NavHeader({ poolCount, lastUpdated, onRefresh, loading, positionCount }: NavHeaderProps) {
   const { user, signOut } = useAuth();
 
   return (
@@ -62,7 +63,7 @@ export function NavHeader({ poolCount, lastUpdated, onRefresh, loading }: NavHea
           <NavLink
             to="/portfolio"
             className={({ isActive }) =>
-              `px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
+              `px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors relative ${
                 isActive
                   ? 'bg-yellow-600 text-white'
                   : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
@@ -70,6 +71,11 @@ export function NavHeader({ poolCount, lastUpdated, onRefresh, loading }: NavHea
             }
           >
             Portfolio
+            {positionCount !== undefined && positionCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-yellow-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                {positionCount}
+              </span>
+            )}
           </NavLink>
         </nav>
         <div className="flex items-center gap-2 pl-2 border-l border-slate-700">
