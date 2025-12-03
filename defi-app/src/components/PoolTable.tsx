@@ -117,9 +117,10 @@ export function PoolTable({
               {onToggleHeld && (
                 <button
                   onClick={() => onToggleHeld(pool.pool, isHeld)}
-                  className={`text-lg ${isHeld ? 'text-yellow-400' : 'text-slate-600'}`}
+                  className={`text-lg cursor-pointer transition-all hover:scale-110 ${isHeld ? 'text-yellow-400 hover:text-yellow-300' : 'text-slate-500 hover:text-yellow-400'}`}
+                  title={isHeld ? 'Remove from portfolio' : 'Add to portfolio'}
                 >
-                  ★
+                  {isHeld ? '★' : '☆'}
                 </button>
               )}
               <span className="text-white font-medium truncate">{pool.symbol}</span>
@@ -411,14 +412,14 @@ export function PoolTable({
                   )}
                 </td>
                 <td className="px-3 py-2 text-sm font-medium text-white">
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     {onToggleHeld && (
                       <button
                         onClick={() => onToggleHeld(pool.pool, isHeld)}
-                        className={`text-sm transition-colors ${isHeld ? 'text-yellow-400' : 'text-slate-600 hover:text-yellow-400'}`}
-                        title={isHeld ? 'Remove from my positions' : 'Add to my positions'}
+                        className={`text-base cursor-pointer transition-all hover:scale-110 ${isHeld ? 'text-yellow-400 hover:text-yellow-300' : 'text-slate-500 hover:text-yellow-400'}`}
+                        title={isHeld ? 'Remove from portfolio' : 'Add to portfolio'}
                       >
-                        ★
+                        {isHeld ? '★' : '☆'}
                       </button>
                     )}
                     {pool.symbol}
