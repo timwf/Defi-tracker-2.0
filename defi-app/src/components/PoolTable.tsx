@@ -207,10 +207,42 @@ export function PoolTable({
     );
   };
 
+  const sortOptions: { field: SortField; label: string }[] = [
+    { field: 'tvlUsd', label: 'TVL' },
+    { field: 'apy', label: 'APY' },
+    { field: 'apyBase', label: 'Base APY' },
+    { field: 'symbol', label: 'Symbol' },
+    { field: 'project', label: 'Protocol' },
+    { field: 'chain', label: 'Chain' },
+    { field: 'apyPct1D', label: '1D Change' },
+    { field: 'apyPct7D', label: '7D Change' },
+    { field: 'sigma', label: 'Sigma (σ)' },
+  ];
+
   return (
     <>
       {/* Mobile card view */}
       <div className="md:hidden space-y-3">
+        {/* Mobile sort controls */}
+        <div className="flex items-center gap-2 bg-slate-800 p-2 rounded-lg">
+          <span className="text-xs text-slate-400">Sort:</span>
+          <select
+            value={sortField}
+            onChange={(e) => onSort(e.target.value as SortField)}
+            className="flex-1 px-2 py-1 text-sm bg-slate-700 border border-slate-600 rounded text-white"
+          >
+            {sortOptions.map((opt) => (
+              <option key={opt.field} value={opt.field}>{opt.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => onSort(sortField)}
+            className="px-3 py-1 text-sm bg-slate-700 border border-slate-600 rounded text-white"
+          >
+            {sortDirection === 'asc' ? '↑ Asc' : '↓ Desc'}
+          </button>
+        </div>
+
         {pools.map((pool) => (
           <MobilePoolCard key={pool.pool} pool={pool} />
         ))}
