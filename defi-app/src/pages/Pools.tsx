@@ -5,7 +5,7 @@ import { PoolTable } from '../components/PoolTable';
 import { SavedViews } from '../components/SavedViews';
 import { HistoricalFetch } from '../components/HistoricalFetch';
 import { filterPools, getUniqueChains, getUniqueProjects, getAvailableChainsForProjects, getAvailableProjectsForChains } from '../utils/filterPools';
-import { fetchMultiplePoolsHistory, fetchPoolHistoryWithCache, type FetchProgress } from '../utils/historicalData';
+import { fetchMultiplePoolsHistory, fetchPoolHistoryWithCache, getAllPoolMetrics, type FetchProgress } from '../utils/historicalData';
 
 interface PoolsPageProps {
   pools: Pool[];
@@ -80,12 +80,39 @@ export function PoolsPage({
 
     const combined = [...filtered, ...heldNotInFiltered];
 
-    return combined.sort((a, b) => {
-      let aVal = a[sortField];
-      let bVal = b[sortField];
+    // Historical metric fields that need to be looked up from metrics
+    const historicalFields = ['base90', 'volatility', 'organicPct', 'tvlChange30d'] as const;
+    const isHistoricalSort = historicalFields.includes(sortField as typeof historicalFields[number]);
 
-      if (aVal === null) aVal = 0;
-      if (bVal === null) bVal = 0;
+    // Pre-compute all metrics once before sorting (avoids repeated lookups)
+    const metricsMap = isHistoricalSort ? getAllPoolMetrics() : null;
+
+    return combined.sort((a, b) => {
+      let aVal: string | number | boolean | null;
+      let bVal: string | number | boolean | null;
+
+      // Check if sorting by a historical metric field
+      if (isHistoricalSort && metricsMap) {
+        const aMetrics = metricsMap.get(a.pool);
+        const bMetrics = metricsMap.get(b.pool);
+        aVal = aMetrics?.[sortField as keyof typeof aMetrics] ?? null;
+        bVal = bMetrics?.[sortField as keyof typeof bMetrics] ?? null;
+      } else {
+        aVal = a[sortField as keyof Pool] as string | number | boolean | null;
+        bVal = b[sortField as keyof Pool] as string | number | boolean | null;
+      }
+
+      // Handle nulls - push them to the end
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return 1;
+      if (bVal === null) return -1;
+
+      // Handle booleans
+      if (typeof aVal === 'boolean' && typeof bVal === 'boolean') {
+        const aNum = aVal ? 1 : 0;
+        const bNum = bVal ? 1 : 0;
+        return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+      }
 
       if (typeof aVal === 'string' && typeof bVal === 'string') {
         return sortDirection === 'asc'

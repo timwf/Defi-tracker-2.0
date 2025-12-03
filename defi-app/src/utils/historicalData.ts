@@ -3,15 +3,44 @@ import type { PoolHistoricalData, HistoricalDataPoint, CalculatedMetrics } from 
 const CACHE_KEY = 'defi-tracker-historical';
 const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// In-memory cache to avoid repeated localStorage parsing
+let memoryCache: Record<string, PoolHistoricalData> | null = null;
+let memoryCacheTimestamp = 0;
+const MEMORY_CACHE_TTL = 1000; // 1 second TTL for memory cache
+
+// Memoized metrics cache (declared early for use in saveToCache)
+let metricsCache: Map<string, CalculatedMetrics | null> = new Map();
+let metricsCacheVersion = 0;
+
 // Cache management
 export function getCache(): Record<string, PoolHistoricalData> {
+  const now = Date.now();
+
+  // Return memory cache if still valid
+  if (memoryCache && (now - memoryCacheTimestamp) < MEMORY_CACHE_TTL) {
+    return memoryCache;
+  }
+
   try {
     const stored = localStorage.getItem(CACHE_KEY);
-    if (!stored) return {};
-    return JSON.parse(stored);
+    if (!stored) {
+      memoryCache = {};
+    } else {
+      memoryCache = JSON.parse(stored);
+    }
+    memoryCacheTimestamp = now;
+    return memoryCache!;
   } catch {
+    memoryCache = {};
+    memoryCacheTimestamp = now;
     return {};
   }
+}
+
+// Invalidate memory cache (call after saving)
+export function invalidateMemoryCache(): void {
+  memoryCache = null;
+  memoryCacheTimestamp = 0;
 }
 
 export function saveToCache(poolId: string, data: HistoricalDataPoint[]): void {
@@ -22,6 +51,10 @@ export function saveToCache(poolId: string, data: HistoricalDataPoint[]): void {
     fetchedAt: Date.now(),
   };
   localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  invalidateMemoryCache(); // Force refresh on next read
+  // Clear the memoized metrics for this pool
+  metricsCache.delete(poolId);
+  metricsCacheVersion++;
 }
 
 export function getCachedData(poolId: string): PoolHistoricalData | null {
@@ -170,11 +203,48 @@ export function calculateMetrics(data: HistoricalDataPoint[]): CalculatedMetrics
   };
 }
 
-// Get metrics for a pool (from cache)
+// Get metrics for a pool (from cache) - memoized
 export function getPoolMetrics(poolId: string): CalculatedMetrics | null {
+  // Check if we have memoized result
+  if (metricsCache.has(poolId)) {
+    return metricsCache.get(poolId) ?? null;
+  }
+
   const cached = getCachedData(poolId);
-  if (!cached) return null;
-  return calculateMetrics(cached.data);
+  if (!cached) {
+    metricsCache.set(poolId, null);
+    return null;
+  }
+
+  const metrics = calculateMetrics(cached.data);
+  metricsCache.set(poolId, metrics);
+  return metrics;
+}
+
+// Get all metrics as a map (for efficient sorting)
+export function getAllPoolMetrics(): Map<string, CalculatedMetrics> {
+  const cache = getCache();
+  const result = new Map<string, CalculatedMetrics>();
+
+  for (const poolId of Object.keys(cache)) {
+    const metrics = getPoolMetrics(poolId);
+    if (metrics) {
+      result.set(poolId, metrics);
+    }
+  }
+
+  return result;
+}
+
+// Clear metrics cache (call when historical data changes)
+export function invalidateMetricsCache(): void {
+  metricsCache.clear();
+  metricsCacheVersion++;
+}
+
+// Get current metrics cache version (for React dependencies)
+export function getMetricsCacheVersion(): number {
+  return metricsCacheVersion;
 }
 
 // Check how many pools have cached data

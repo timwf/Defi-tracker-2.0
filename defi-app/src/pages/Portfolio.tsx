@@ -3,6 +3,7 @@ import type { Pool, HeldPosition, CalculatedMetrics } from '../types/pool';
 import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../utils/heldPositions';
 import { getCachedData, getPoolMetrics } from '../utils/historicalData';
 import { Sparkline } from '../components/Sparkline';
+import { MetricInfo } from '../components/MetricInfo';
 
 interface PortfolioProps {
   positions: HeldPosition[];
@@ -250,20 +251,32 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     <div className="space-y-6">
       {/* Summary Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <div className="bg-slate-800 rounded-lg p-3 md:p-4">
-          <div className="text-xs md:text-sm text-slate-400 mb-1">Total Value</div>
+        <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
+          <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
+            Total Value
+            <MetricInfo metric="totalValue" value={totalValue} />
+          </div>
           <div className="text-lg md:text-2xl font-bold text-white">{formatCurrency(totalValue)}</div>
         </div>
-        <div className="bg-slate-800 rounded-lg p-3 md:p-4">
-          <div className="text-xs md:text-sm text-slate-400 mb-1">Weighted APY</div>
+        <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
+          <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
+            Weighted APY
+            <MetricInfo metric="weightedApy" value={weightedApy} />
+          </div>
           <div className="text-lg md:text-2xl font-bold text-green-400">{weightedApy.toFixed(2)}%</div>
         </div>
-        <div className="bg-slate-800 rounded-lg p-3 md:p-4">
-          <div className="text-xs md:text-sm text-slate-400 mb-1">Annual</div>
+        <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
+          <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
+            Annual
+            <MetricInfo metric="annualEarnings" value={projectedAnnualEarnings} />
+          </div>
           <div className="text-lg md:text-2xl font-bold text-emerald-400">{formatCurrency(projectedAnnualEarnings)}</div>
         </div>
-        <div className="bg-slate-800 rounded-lg p-3 md:p-4">
-          <div className="text-xs md:text-sm text-slate-400 mb-1">Daily</div>
+        <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
+          <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
+            Daily
+            <MetricInfo metric="dailyEarnings" value={projectedDailyEarnings} />
+          </div>
           <div className="text-lg md:text-2xl font-bold text-emerald-400">{formatCurrency(projectedDailyEarnings)}</div>
         </div>
       </div>
@@ -404,20 +417,32 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                         )}
 
                         <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4 text-sm">
-                          <div>
-                            <div className="text-slate-400 text-xs">Amount</div>
+                          <div className="group">
+                            <div className="text-slate-400 text-xs flex items-center">
+                              Amount
+                              <MetricInfo metric="amount" value={position.amountUsd} />
+                            </div>
                             <div className="text-white font-medium">{formatCurrency(position.amountUsd)}</div>
                           </div>
-                          <div>
-                            <div className="text-slate-400 text-xs">APY</div>
+                          <div className="group">
+                            <div className="text-slate-400 text-xs flex items-center">
+                              APY
+                              <MetricInfo metric="apy" value={pool.apy} pool={pool} metrics={metrics ?? undefined} />
+                            </div>
                             <div className="text-green-400 font-medium">{pool.apy.toFixed(2)}%</div>
                           </div>
-                          <div>
-                            <div className="text-slate-400 text-xs">Base APY</div>
+                          <div className="group">
+                            <div className="text-slate-400 text-xs flex items-center">
+                              Base APY
+                              <MetricInfo metric="apyBase" value={pool.apyBase ?? 0} pool={pool} />
+                            </div>
                             <div className="text-slate-300 font-medium">{(pool.apyBase ?? 0).toFixed(2)}%</div>
                           </div>
-                          <div>
-                            <div className="text-slate-400 text-xs">Reward APY</div>
+                          <div className="group">
+                            <div className="text-slate-400 text-xs flex items-center">
+                              Reward APY
+                              <MetricInfo metric="apyReward" value={pool.apyReward ?? 0} pool={pool} />
+                            </div>
                             <div className="flex items-center gap-1">
                               <span className="text-purple-400 font-medium">{(pool.apyReward ?? 0).toFixed(2)}%</span>
                               {pool.apy > 0 && (
@@ -427,8 +452,29 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                               )}
                             </div>
                           </div>
-                          <div>
-                            <div className="text-slate-400 text-xs">Base90 Avg</div>
+                          <div className="group">
+                            <div className="text-slate-400 text-xs flex items-center">
+                              Avg30
+                              <MetricInfo metric="avg30" value={pool.apyMean30d} pool={pool} />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {pool.apyMean30d !== null ? (
+                                <>
+                                  <span className="text-cyan-400 font-medium">{pool.apyMean30d.toFixed(2)}%</span>
+                                  <span className={pool.apy > pool.apyMean30d ? 'text-green-400' : 'text-red-400'}>
+                                    {pool.apy > pool.apyMean30d ? '↑' : '↓'}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-slate-500">-</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="group">
+                            <div className="text-slate-400 text-xs flex items-center">
+                              Avg90
+                              <MetricInfo metric="avg90" value={metrics?.base90} pool={pool} metrics={metrics ?? undefined} />
+                            </div>
                             <div className="flex items-center gap-1">
                               {metrics?.base90 !== undefined ? (
                                 <>
@@ -444,8 +490,11 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                               )}
                             </div>
                           </div>
-                          <div>
-                            <div className="text-slate-400 text-xs">TVL</div>
+                          <div className="group">
+                            <div className="text-slate-400 text-xs flex items-center">
+                              TVL
+                              <MetricInfo metric="tvl" value={pool.tvlUsd} pool={pool} metrics={metrics ?? undefined} />
+                            </div>
                             <div className="flex items-center gap-1">
                               <span className="text-white font-medium">
                                 {pool.tvlUsd >= 1_000_000
@@ -459,12 +508,18 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                               )}
                             </div>
                           </div>
-                          <div>
-                            <div className="text-slate-400 text-xs">Allocation</div>
+                          <div className="group">
+                            <div className="text-slate-400 text-xs flex items-center">
+                              Allocation
+                              <MetricInfo metric="allocation" value={allocation} />
+                            </div>
                             <div className="text-white font-medium">{allocation.toFixed(1)}%</div>
                           </div>
-                          <div>
-                            <div className="text-slate-400 text-xs">Annual</div>
+                          <div className="group">
+                            <div className="text-slate-400 text-xs flex items-center">
+                              Annual
+                              <MetricInfo metric="annualEarnings" value={projectedEarning} />
+                            </div>
                             <div className="text-emerald-400 font-medium">{formatCurrency(projectedEarning)}</div>
                           </div>
                           {position.notes && (
@@ -603,9 +658,12 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
           <div className="bg-slate-800 rounded-lg p-4">
             <h3 className="text-md font-medium text-white mb-4">Risk Breakdown</h3>
             <div className="space-y-3">
-              <div>
+              <div className="group">
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-slate-300">Stablecoin</span>
+                  <span className="text-slate-300 flex items-center">
+                    Stablecoin
+                    <MetricInfo metric="stablecoinAllocation" value={totalValue > 0 ? (riskBreakdown.stablecoinValue / totalValue) * 100 : 0} />
+                  </span>
                   <span className="text-slate-400">
                     {totalValue > 0 ? ((riskBreakdown.stablecoinValue / totalValue) * 100).toFixed(1) : 0}%
                   </span>
@@ -617,9 +675,12 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                   />
                 </div>
               </div>
-              <div>
+              <div className="group">
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-slate-300">Volatile Assets</span>
+                  <span className="text-slate-300 flex items-center">
+                    Volatile Assets
+                    <MetricInfo metric="volatileAllocation" value={totalValue > 0 ? (riskBreakdown.volatileValue / totalValue) * 100 : 0} />
+                  </span>
                   <span className="text-slate-400">
                     {totalValue > 0 ? ((riskBreakdown.volatileValue / totalValue) * 100).toFixed(1) : 0}%
                   </span>
@@ -631,9 +692,12 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                   />
                 </div>
               </div>
-              <div>
+              <div className="group">
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-slate-300">Organic Yield</span>
+                  <span className="text-slate-300 flex items-center">
+                    Organic Yield
+                    <MetricInfo metric="organicYield" value={riskBreakdown.organicYieldPct} />
+                  </span>
                   <span className="text-slate-400">{riskBreakdown.organicYieldPct.toFixed(1)}%</span>
                 </div>
                 <div className="h-2 bg-slate-700 rounded-full overflow-hidden">

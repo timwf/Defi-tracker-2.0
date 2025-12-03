@@ -2,6 +2,7 @@ import type { Pool, SortField, SortDirection, CalculatedMetrics } from '../types
 import { formatTvl, formatApy, formatChange, formatSigma, formatPrediction } from '../utils/filterPools';
 import { getPoolMetrics, getCacheAge, getCachedData } from '../utils/historicalData';
 import { Sparkline } from './Sparkline';
+import { MetricInfo } from './MetricInfo';
 
 function getRewardPct(pool: Pool): number | null {
   if (pool.apy === 0 || pool.apy === null) return null;
@@ -129,72 +130,102 @@ export function PoolTable({
               {apyHistory.length >= 2 && (
                 <Sparkline data={apyHistory} width={50} height={18} />
               )}
+              <MetricInfo metric="apy" value={pool.apy} pool={pool} />
             </div>
-            <div className="text-xs text-slate-400">{formatTvl(pool.tvlUsd)}</div>
+            <div className="flex items-center justify-end gap-1 text-xs text-slate-400">
+              {formatTvl(pool.tvlUsd)}
+              <MetricInfo metric="tvl" value={pool.tvlUsd} pool={pool} />
+            </div>
           </div>
         </div>
 
         <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
           <div>
-            <div className="text-slate-500">Base</div>
+            <div className="flex items-center gap-1 text-slate-500">Base <MetricInfo metric="apyBase" value={pool.apyBase} pool={pool} /></div>
             <div className="text-slate-300">{formatApy(pool.apyBase)}</div>
           </div>
           <div>
-            <div className="text-slate-500">Reward</div>
+            <div className="flex items-center gap-1 text-slate-500">Reward <MetricInfo metric="apyReward" value={pool.apyReward} pool={pool} /></div>
             <div className="text-purple-400">
               {formatApy(pool.apyReward)}
               {rewardPct !== null && <span className="text-slate-500 ml-1">({rewardPct.toFixed(0)}%)</span>}
             </div>
           </div>
           <div>
-            <div className="text-slate-500">1D</div>
+            <div className="flex items-center gap-1 text-slate-500">1D <MetricInfo metric="change1d" value={pool.apyPct1D} pool={pool} /></div>
             <div className={formatChange(pool.apyPct1D).color}>{formatChange(pool.apyPct1D).text}</div>
           </div>
           <div>
-            <div className="text-slate-500">7D</div>
+            <div className="flex items-center gap-1 text-slate-500">7D <MetricInfo metric="change7d" value={pool.apyPct7D} pool={pool} /></div>
             <div className={formatChange(pool.apyPct7D).color}>{formatChange(pool.apyPct7D).text}</div>
           </div>
         </div>
 
         <div className="grid grid-cols-4 gap-2 mt-2 text-xs border-t border-slate-700 pt-2">
           <div>
-            <div className="text-slate-500">σ</div>
+            <div className="flex items-center gap-1 text-slate-500">σ <MetricInfo metric="sigma" value={pool.sigma} pool={pool} /></div>
             <div className={formatSigma(pool.sigma).color}>{formatSigma(pool.sigma).text}</div>
           </div>
           <div>
-            <div className="text-slate-500">Stable</div>
+            <div className="flex items-center gap-1 text-slate-500">Stable <MetricInfo metric="stablecoin" value={pool.stablecoin} pool={pool} /></div>
             <div className={pool.stablecoin ? 'text-green-400' : 'text-slate-500'}>
               {pool.stablecoin ? 'Yes' : 'No'}
             </div>
           </div>
           <div className="col-span-2">
-            <div className="text-slate-500">Prediction</div>
+            <div className="flex items-center gap-1 text-slate-500">Prediction <MetricInfo metric="prediction" value={pool.predictions} pool={pool} /></div>
             <div className={formatPrediction(pool.predictions).color}>
               {formatPrediction(pool.predictions).text}
             </div>
           </div>
         </div>
 
-        {metrics && (
-          <div className="grid grid-cols-5 gap-2 mt-2 text-xs border-t border-slate-700 pt-2">
+        {/* Average APY row - always show if Avg30 available */}
+        {(pool.apyMean30d !== null || metrics) && (
+          <div className="grid grid-cols-2 gap-2 mt-2 text-xs border-t border-slate-700 pt-2">
             <div>
-              <div className="text-slate-500">Base90</div>
-              <div className="text-cyan-400">{metrics.base90.toFixed(1)}%</div>
+              <div className="flex items-center gap-1 text-slate-500">Avg30 <MetricInfo metric="avg30" value={pool.apyMean30d} pool={pool} /></div>
+              {pool.apyMean30d !== null ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-cyan-400">{pool.apyMean30d.toFixed(1)}%</span>
+                  <span className={pool.apy > pool.apyMean30d ? 'text-green-400' : 'text-red-400'}>
+                    {pool.apy > pool.apyMean30d ? '↑' : '↓'}
+                  </span>
+                </div>
+              ) : <div className="text-slate-500">-</div>}
             </div>
             <div>
-              <div className="text-slate-500">Days</div>
+              <div className="flex items-center gap-1 text-slate-500">Avg90 <MetricInfo metric="avg90" value={metrics?.base90} pool={pool} metrics={metrics ?? undefined} /></div>
+              {metrics ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-cyan-400">{metrics.base90.toFixed(1)}%</span>
+                  {pool.apyBase !== null && (
+                    <span className={pool.apyBase > metrics.base90 ? 'text-green-400' : 'text-red-400'}>
+                      {pool.apyBase > metrics.base90 ? '↑' : '↓'}
+                    </span>
+                  )}
+                </div>
+              ) : <div className="text-slate-500">-</div>}
+            </div>
+          </div>
+        )}
+
+        {metrics && (
+          <div className="grid grid-cols-4 gap-2 mt-2 text-xs border-t border-slate-700 pt-2">
+            <div>
+              <div className="flex items-center gap-1 text-slate-500">Days <MetricInfo metric="days" value={metrics.dataPoints} pool={pool} metrics={metrics} /></div>
               <div className="text-slate-400">{metrics.dataPoints}</div>
             </div>
             <div>
-              <div className="text-slate-500">Vol</div>
+              <div className="flex items-center gap-1 text-slate-500">Vol <MetricInfo metric="volatility" value={metrics.volatility} pool={pool} metrics={metrics} /></div>
               <div className={getVolatilityColor(metrics.volatility)}>{metrics.volatility.toFixed(1)}</div>
             </div>
             <div>
-              <div className="text-slate-500">Org%</div>
+              <div className="flex items-center gap-1 text-slate-500">Org% <MetricInfo metric="organicPct" value={metrics.organicPct} pool={pool} metrics={metrics} /></div>
               <div className={getOrganicColor(metrics.organicPct)}>{metrics.organicPct}%</div>
             </div>
             <div>
-              <div className="text-slate-500">TVL Δ</div>
+              <div className="flex items-center gap-1 text-slate-500">TVL Δ <MetricInfo metric="tvlChange" value={metrics.tvlChange30d} pool={pool} metrics={metrics} /></div>
               <div className={getTvlFlowColor(metrics.tvlChange30d)}>
                 {metrics.tvlChange30d >= 0 ? '+' : ''}{metrics.tvlChange30d}%
               </div>
@@ -233,16 +264,30 @@ export function PoolTable({
     );
   };
 
-  const sortOptions: { field: SortField; label: string }[] = [
+  const sortOptions: { field: SortField; label: string; group?: string }[] = [
+    // Primary metrics
     { field: 'tvlUsd', label: 'TVL' },
     { field: 'apy', label: 'APY' },
     { field: 'apyBase', label: 'Base APY' },
+    { field: 'apyReward', label: 'Reward APY' },
+    // Identifiers
     { field: 'symbol', label: 'Symbol' },
     { field: 'project', label: 'Protocol' },
     { field: 'chain', label: 'Chain' },
+    { field: 'stablecoin', label: 'Stablecoin' },
+    // Averages
+    { field: 'apyMean30d', label: 'Avg 30D' },
+    { field: 'base90', label: 'Avg 90D *' },
+    // Changes
     { field: 'apyPct1D', label: '1D Change' },
     { field: 'apyPct7D', label: '7D Change' },
+    { field: 'apyPct30D', label: '30D Change' },
+    // Volatility
     { field: 'sigma', label: 'Sigma (σ)' },
+    { field: 'volatility', label: 'Volatility *' },
+    // Historical metrics (require fetch)
+    { field: 'organicPct', label: 'Organic % *' },
+    { field: 'tvlChange30d', label: 'TVL Change *' },
   ];
 
   return (
@@ -289,19 +334,20 @@ export function PoolTable({
             <SortHeader field="tvlUsd" label="TVL" tooltip="Total Value Locked in USD. Higher TVL = more liquidity & generally safer. $50M+ = large, $10-50M = medium, <$10M = smaller/riskier." />
             <SortHeader field="apy" label="APY" tooltip="Total Annual Percentage Yield = Base + Rewards. This is what you'd earn if rates stayed constant for a year. Beware: high APY often comes from temporary incentives." />
             <SortHeader field="apyBase" label="Base" tooltip="Base APY from protocol fees/interest. This is ORGANIC yield - sustainable and not dependent on token incentives. Focus on this for long-term positions." />
-            <Header label="Reward" tooltip="Additional APY from token incentives. WARNING: Reward APY can disappear when incentive programs end. Don't chase high reward APY without checking sustainability." />
-            {/* Historical data columns */}
-            <Header label="Base90" tooltip="90-DAY AVERAGE Base APY (requires historical fetch). Calculated: mean of daily apyBase over last 90 days. Arrow shows trend: ↑ green = current above average (improving), ↓ red = current below average (declining)." />
+            <SortHeader field="apyReward" label="Reward" tooltip="Additional APY from token incentives. WARNING: Reward APY can disappear when incentive programs end. Don't chase high reward APY without checking sustainability." />
+            {/* Average APY columns */}
+            <SortHeader field="apyMean30d" label="Avg30" tooltip="30-DAY AVERAGE APY from DefiLlama API. Shows the mean APY over the past 30 days. Compare with current APY to spot trends." />
+            <SortHeader field="base90" label="Avg90" tooltip="90-DAY AVERAGE Base APY (requires historical fetch). Calculated: mean of daily apyBase over last 90 days. Arrow shows trend: ↑ green = current above average (improving), ↓ red = current below average (declining). Pools without fetched data will sort to bottom." />
             <Header label="Days" tooltip="DAYS OF DATA available in DefiLlama. More days = more reliable metrics. 365+ = established pool, 90-365 = maturing, <90 = newer/less data to analyze." />
-            <Header label="Vol" tooltip="APY VOLATILITY = standard deviation of Base APY over 90 days. Calculated: σ of daily apyBase values. Green <1.5 = stable/predictable, Yellow 1.5-3 = moderate swings, Red >3 = highly volatile/unpredictable yields." />
-            <Header label="Org%" tooltip="ORGANIC PERCENTAGE = (Base APY / Total APY) × 100. Calculated: average over 90 days. Green 95%+ = sustainable yield, Yellow 80-95% = some incentive dependency, Orange 50-80% = heavily incentivized, Red <50% = mostly temporary rewards." />
-            <Header label="TVL Δ" tooltip="30-DAY TVL CHANGE. Calculated: ((current - 30d ago) / 30d ago) × 100. Green >-10% = stable/growing (healthy), Yellow -10 to -25% = declining (monitor), Red <-25% = capital exodus (warning sign - others leaving)." />
+            <SortHeader field="volatility" label="Vol" tooltip="APY VOLATILITY = standard deviation of Base APY over 90 days. Calculated: σ of daily apyBase values. Green <1.5 = stable/predictable, Yellow 1.5-3 = moderate swings, Red >3 = highly volatile/unpredictable yields. Requires historical fetch." />
+            <SortHeader field="organicPct" label="Org%" tooltip="ORGANIC PERCENTAGE = (Base APY / Total APY) × 100. Calculated: average over 90 days. Green 95%+ = sustainable yield, Yellow 80-95% = some incentive dependency, Orange 50-80% = heavily incentivized, Red <50% = mostly temporary rewards. Requires historical fetch." />
+            <SortHeader field="tvlChange30d" label="TVL Δ" tooltip="30-DAY TVL CHANGE. Calculated: ((current - 30d ago) / 30d ago) × 100. Green >-10% = stable/growing (healthy), Yellow -10 to -25% = declining (monitor), Red <-25% = capital exodus (warning sign - others leaving). Requires historical fetch." />
             {/* Standard columns */}
             <SortHeader field="apyPct1D" label="1D" tooltip="APY CHANGE last 24 hours. From DefiLlama API. Green = APY increased, Red = decreased. Large daily swings may indicate volatility." />
             <SortHeader field="apyPct7D" label="7D" tooltip="APY CHANGE last 7 days. From DefiLlama API. More meaningful than 1D for spotting trends. Sustained green = improving, sustained red = declining." />
             <SortHeader field="sigma" label="σ" tooltip="SIGMA (DefiLlama's volatility). From API - their calculation of APY standard deviation. Green <1.5 = stable, Yellow 1.5-3 = moderate, Red >3 = high volatility. Similar to Vol column but API-provided." />
             <Header label="Prediction" tooltip="DEFILLAMA ML PREDICTION. Their machine learning model predicts APY direction. Shows predicted class (Up/Down/Stable) with confidence %. Use as one input, not gospel - ML predictions have limits." />
-            <Header label="Stable" tooltip="STABLECOIN POOL. Yes = pool contains stablecoins (USDC, USDT, DAI, etc). Stablecoin pools typically have lower impermanent loss risk but may have lower yields." />
+            <SortHeader field="stablecoin" label="Stable" tooltip="STABLECOIN POOL. Yes = pool contains stablecoins (USDC, USDT, DAI, etc). Stablecoin pools typically have lower impermanent loss risk but may have lower yields. Sort to group stablecoin pools together." />
             <Header label="Link" tooltip="View full pool details on DefiLlama including charts, historical data, and more pool metadata." />
           </tr>
         </thead>
@@ -359,66 +405,141 @@ export function PoolTable({
                     {pool.symbol}
                   </div>
                 </td>
-                <td className="px-3 py-2 text-xs text-slate-300">{pool.project}</td>
-                <td className="px-3 py-2 text-xs text-slate-300">{pool.chain}</td>
-                <td className="px-3 py-2 text-xs text-slate-300">{formatTvl(pool.tvlUsd)}</td>
-                <td className="px-3 py-2 text-sm font-medium">
+                <td className="px-3 py-2 text-xs text-slate-300 group">
+                  <div className="flex items-center gap-1">
+                    {pool.project}
+                    <MetricInfo metric="project" value={pool.project} pool={pool} />
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-xs text-slate-300 group">
+                  <div className="flex items-center gap-1">
+                    {pool.chain}
+                    <MetricInfo metric="chain" value={pool.chain} pool={pool} />
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-xs text-slate-300 group">
+                  <div className="flex items-center gap-1">
+                    {formatTvl(pool.tvlUsd)}
+                    <MetricInfo metric="tvl" value={pool.tvlUsd} pool={pool} />
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-sm font-medium group">
                   <div className="flex items-center gap-2">
                     <span className="text-green-400">{formatApy(pool.apy)}</span>
                     {(() => {
                       const apyHistory = getApyHistory(pool.pool);
                       return apyHistory.length >= 2 ? <Sparkline data={apyHistory} width={50} height={18} /> : null;
                     })()}
+                    <MetricInfo metric="apy" value={pool.apy} pool={pool} />
                   </div>
                 </td>
-                <td className="px-3 py-2 text-xs text-slate-300">{formatApy(pool.apyBase)}</td>
-                <td className="px-3 py-2 text-xs">
+                <td className="px-3 py-2 text-xs text-slate-300 group">
+                  <div className="flex items-center gap-1">
+                    {formatApy(pool.apyBase)}
+                    <MetricInfo metric="apyBase" value={pool.apyBase} pool={pool} />
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-xs group">
                   <div className="flex items-center gap-1">
                     <span className="text-purple-400">{formatApy(pool.apyReward)}</span>
                     {(() => {
                       const rewardPct = getRewardPct(pool);
                       return rewardPct !== null ? <span className="text-slate-500">({rewardPct.toFixed(0)}%)</span> : null;
                     })()}
+                    <MetricInfo metric="apyReward" value={pool.apyReward} pool={pool} />
                   </div>
                 </td>
-                {/* Historical data columns */}
-                <td className="px-3 py-2 text-xs">
-                  {metrics?.base90 !== undefined ? (
-                    <span className="flex items-center gap-1">
-                      <span className="text-cyan-400">{metrics.base90.toFixed(2)}%</span>
-                      {pool.apyBase !== null && (
-                        <span className={pool.apyBase > metrics.base90 ? 'text-green-400' : 'text-red-400'}>
-                          {pool.apyBase > metrics.base90 ? '↑' : '↓'}
-                        </span>
-                      )}
-                    </span>
-                  ) : '-'}
+                {/* Average APY columns */}
+                <td className="px-3 py-2 text-xs group">
+                  <div className="flex items-center gap-1">
+                    {pool.apyMean30d !== null ? (
+                      <>
+                        <span className="text-cyan-400">{pool.apyMean30d.toFixed(2)}%</span>
+                        {pool.apy !== null && (
+                          <span className={pool.apy > pool.apyMean30d ? 'text-green-400' : 'text-red-400'}>
+                            {pool.apy > pool.apyMean30d ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </>
+                    ) : '-'}
+                    <MetricInfo metric="avg30" value={pool.apyMean30d} pool={pool} />
+                  </div>
                 </td>
-                <td className="px-3 py-2 text-xs text-slate-400">
-                  {metrics?.dataPoints !== undefined ? metrics.dataPoints : '-'}
+                <td className="px-3 py-2 text-xs group">
+                  <div className="flex items-center gap-1">
+                    {metrics?.base90 !== undefined ? (
+                      <>
+                        <span className="text-cyan-400">{metrics.base90.toFixed(2)}%</span>
+                        {pool.apyBase !== null && (
+                          <span className={pool.apyBase > metrics.base90 ? 'text-green-400' : 'text-red-400'}>
+                            {pool.apyBase > metrics.base90 ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </>
+                    ) : '-'}
+                    <MetricInfo metric="avg90" value={metrics?.base90} pool={pool} metrics={metrics ?? undefined} />
+                  </div>
                 </td>
-                <td className={`px-3 py-2 text-xs ${getVolatilityColor(metrics?.volatility)}`}>
-                  {formatMetricValue(metrics?.volatility, '')}
+                <td className="px-3 py-2 text-xs text-slate-400 group">
+                  <div className="flex items-center gap-1">
+                    {metrics?.dataPoints !== undefined ? metrics.dataPoints : '-'}
+                    <MetricInfo metric="days" value={metrics?.dataPoints} pool={pool} metrics={metrics ?? undefined} />
+                  </div>
                 </td>
-                <td className={`px-3 py-2 text-xs ${getOrganicColor(metrics?.organicPct)}`}>
-                  {metrics?.organicPct !== undefined ? `${metrics.organicPct}%` : '-'}
+                <td className={`px-3 py-2 text-xs ${getVolatilityColor(metrics?.volatility)} group`}>
+                  <div className="flex items-center gap-1">
+                    {formatMetricValue(metrics?.volatility, '')}
+                    <MetricInfo metric="volatility" value={metrics?.volatility} pool={pool} metrics={metrics ?? undefined} />
+                  </div>
                 </td>
-                <td className={`px-3 py-2 text-xs ${getTvlFlowColor(metrics?.tvlChange30d)}`}>
-                  {metrics?.tvlChange30d !== undefined
-                    ? `${metrics.tvlChange30d >= 0 ? '+' : ''}${metrics.tvlChange30d}%`
-                    : '-'}
+                <td className={`px-3 py-2 text-xs ${getOrganicColor(metrics?.organicPct)} group`}>
+                  <div className="flex items-center gap-1">
+                    {metrics?.organicPct !== undefined ? `${metrics.organicPct}%` : '-'}
+                    <MetricInfo metric="organicPct" value={metrics?.organicPct} pool={pool} metrics={metrics ?? undefined} />
+                  </div>
+                </td>
+                <td className={`px-3 py-2 text-xs ${getTvlFlowColor(metrics?.tvlChange30d)} group`}>
+                  <div className="flex items-center gap-1">
+                    {metrics?.tvlChange30d !== undefined
+                      ? `${metrics.tvlChange30d >= 0 ? '+' : ''}${metrics.tvlChange30d}%`
+                      : '-'}
+                    <MetricInfo metric="tvlChange" value={metrics?.tvlChange30d} pool={pool} metrics={metrics ?? undefined} />
+                  </div>
                 </td>
                 {/* Standard columns */}
-                <td className={`px-3 py-2 text-xs ${change1D.color}`}>{change1D.text}</td>
-                <td className={`px-3 py-2 text-xs ${change7D.color}`}>{change7D.text}</td>
-                <td className={`px-3 py-2 text-xs ${sigma.color}`}>{sigma.text}</td>
-                <td className={`px-3 py-2 text-xs ${prediction.color}`}>{prediction.text}</td>
-                <td className="px-3 py-2 text-xs">
-                  {pool.stablecoin ? (
-                    <span className="text-green-400">Yes</span>
-                  ) : (
-                    <span className="text-slate-500">No</span>
-                  )}
+                <td className={`px-3 py-2 text-xs ${change1D.color} group`}>
+                  <div className="flex items-center gap-1">
+                    {change1D.text}
+                    <MetricInfo metric="change1d" value={pool.apyPct1D} pool={pool} />
+                  </div>
+                </td>
+                <td className={`px-3 py-2 text-xs ${change7D.color} group`}>
+                  <div className="flex items-center gap-1">
+                    {change7D.text}
+                    <MetricInfo metric="change7d" value={pool.apyPct7D} pool={pool} />
+                  </div>
+                </td>
+                <td className={`px-3 py-2 text-xs ${sigma.color} group`}>
+                  <div className="flex items-center gap-1">
+                    {sigma.text}
+                    <MetricInfo metric="sigma" value={pool.sigma} pool={pool} />
+                  </div>
+                </td>
+                <td className={`px-3 py-2 text-xs ${prediction.color} group`}>
+                  <div className="flex items-center gap-1">
+                    {prediction.text}
+                    <MetricInfo metric="prediction" value={pool.predictions} pool={pool} />
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-xs group">
+                  <div className="flex items-center gap-1">
+                    {pool.stablecoin ? (
+                      <span className="text-green-400">Yes</span>
+                    ) : (
+                      <span className="text-slate-500">No</span>
+                    )}
+                    <MetricInfo metric="stablecoin" value={pool.stablecoin} pool={pool} />
+                  </div>
                 </td>
                 <td className="px-3 py-2 text-xs">
                   <a

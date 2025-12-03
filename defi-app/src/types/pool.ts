@@ -48,7 +48,12 @@ export interface Filters {
   search: string;
 }
 
-export type SortField = 'symbol' | 'project' | 'chain' | 'tvlUsd' | 'apy' | 'apyBase' | 'apyPct1D' | 'apyPct7D' | 'apyPct30D' | 'sigma';
+export type SortField =
+  | 'symbol' | 'project' | 'chain' | 'tvlUsd' | 'apy' | 'apyBase'
+  | 'apyReward' | 'apyMean30d' | 'apyPct1D' | 'apyPct7D' | 'apyPct30D'
+  | 'sigma' | 'stablecoin'
+  // Historical data fields (require fetch)
+  | 'base90' | 'volatility' | 'organicPct' | 'tvlChange30d';
 export type SortDirection = 'asc' | 'desc';
 
 export interface SavedView {
