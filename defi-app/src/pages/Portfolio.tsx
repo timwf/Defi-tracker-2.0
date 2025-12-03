@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { Pool, HeldPosition, CalculatedMetrics } from '../types/pool';
-import { addHeldPosition, removeHeldPosition, updatePosition, type AddPositionParams } from '../utils/heldPositions';
+import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../utils/heldPositions';
 import { getCachedData, getPoolMetrics } from '../utils/historicalData';
 import { Sparkline } from '../components/Sparkline';
 
@@ -8,6 +8,7 @@ interface PortfolioProps {
   positions: HeldPosition[];
   pools: Pool[];
   onPositionsChange: (positions: HeldPosition[]) => void;
+  onRefreshPositions?: () => Promise<void>;
 }
 
 interface PositionWithPool {
@@ -23,7 +24,7 @@ interface PositionAlert {
   message: string;
 }
 
-export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProps) {
+export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioProps) {
   const [newPoolId, setNewPoolId] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newEntryDate, setNewEntryDate] = useState('');
@@ -32,6 +33,7 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [saving, setSaving] = useState(false);
 
   // Get positions with pool info, metrics, and alerts
   const positionsWithPools = useMemo<PositionWithPool[]>(() => {
@@ -147,7 +149,7 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
     };
   }, [positionsWithPools, totalValue]);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const trimmedId = newPoolId.trim();
     const amount = parseFloat(newAmount);
 
@@ -171,23 +173,41 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
       return;
     }
 
-    const params: AddPositionParams = {
-      poolId: trimmedId,
-      amountUsd: amount,
-      entryDate: newEntryDate || undefined,
-      notes: newNotes || undefined,
-    };
+    setSaving(true);
+    try {
+      await addPositionToDb({
+        poolId: trimmedId,
+        amountUsd: amount,
+        entryDate: newEntryDate || undefined,
+        notes: newNotes || undefined,
+      });
 
-    onPositionsChange(addHeldPosition(params));
-    setNewPoolId('');
-    setNewAmount('');
-    setNewEntryDate('');
-    setNewNotes('');
-    setError('');
+      if (onRefreshPositions) {
+        await onRefreshPositions();
+      }
+
+      setNewPoolId('');
+      setNewAmount('');
+      setNewEntryDate('');
+      setNewNotes('');
+      setError('');
+    } catch (err) {
+      setError('Failed to add position');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleRemove = (poolId: string) => {
-    onPositionsChange(removeHeldPosition(poolId));
+  const handleRemove = async (poolId: string) => {
+    setSaving(true);
+    try {
+      await removePositionFromDb(poolId);
+      if (onRefreshPositions) {
+        await onRefreshPositions();
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleStartEdit = (position: HeldPosition) => {
@@ -196,16 +216,24 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
     setEditNotes(position.notes || '');
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingId) return;
     const amount = parseFloat(editAmount);
     if (isNaN(amount) || amount <= 0) return;
 
-    onPositionsChange(updatePosition(editingId, {
-      amountUsd: amount,
-      notes: editNotes || undefined,
-    }));
-    setEditingId(null);
+    setSaving(true);
+    try {
+      await updatePositionInDb(editingId, {
+        amountUsd: amount,
+        notes: editNotes || undefined,
+      });
+      if (onRefreshPositions) {
+        await onRefreshPositions();
+      }
+      setEditingId(null);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancelEdit = () => {
@@ -292,13 +320,15 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                           <>
                             <button
                               onClick={() => handleStartEdit(position)}
-                              className="text-slate-400 hover:text-blue-400 text-xs sm:text-sm px-2 py-1"
+                              disabled={saving}
+                              className="text-slate-400 hover:text-blue-400 text-xs sm:text-sm px-2 py-1 disabled:opacity-50"
                             >
                               Edit
                             </button>
                             <button
                               onClick={() => handleRemove(position.poolId)}
-                              className="text-slate-400 hover:text-red-400 text-xs sm:text-sm px-2 py-1"
+                              disabled={saving}
+                              className="text-slate-400 hover:text-red-400 text-xs sm:text-sm px-2 py-1 disabled:opacity-50"
                             >
                               Remove
                             </button>
@@ -332,9 +362,10 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                         <div className="flex gap-2">
                           <button
                             onClick={handleSaveEdit}
-                            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 text-sm"
+                            disabled={saving}
+                            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 text-sm disabled:opacity-50"
                           >
-                            Save
+                            {saving ? 'Saving...' : 'Save'}
                           </button>
                           <button
                             onClick={handleCancelEdit}
@@ -500,9 +531,10 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
             )}
             <button
               onClick={handleAdd}
-              className="mt-4 w-full sm:w-auto px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-500 font-medium"
+              disabled={saving}
+              className="mt-4 w-full sm:w-auto px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-500 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Add Position
+              {saving ? 'Adding...' : 'Add Position'}
             </button>
           </div>
         </div>

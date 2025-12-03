@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 interface NavHeaderProps {
   poolCount: number;
@@ -18,6 +19,8 @@ function formatTimeAgo(timestamp: number): string {
 }
 
 export function NavHeader({ poolCount, lastUpdated, onRefresh, loading }: NavHeaderProps) {
+  const { user, signOut } = useAuth();
+
   return (
     <header className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
@@ -42,32 +45,56 @@ export function NavHeader({ poolCount, lastUpdated, onRefresh, loading }: NavHea
           </button>
         </div>
       </div>
-      <nav className="flex gap-2">
-        <NavLink
-          to="/pools"
-          className={({ isActive }) =>
-            `px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
-              isActive
-                ? 'bg-yellow-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-            }`
-          }
-        >
-          Pools
-        </NavLink>
-        <NavLink
-          to="/portfolio"
-          className={({ isActive }) =>
-            `px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
-              isActive
-                ? 'bg-yellow-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-            }`
-          }
-        >
-          Portfolio
-        </NavLink>
-      </nav>
+      <div className="flex items-center gap-2 sm:gap-4">
+        <nav className="flex gap-2">
+          <NavLink
+            to="/pools"
+            className={({ isActive }) =>
+              `px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
+                isActive
+                  ? 'bg-yellow-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+              }`
+            }
+          >
+            Pools
+          </NavLink>
+          <NavLink
+            to="/portfolio"
+            className={({ isActive }) =>
+              `px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
+                isActive
+                  ? 'bg-yellow-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+              }`
+            }
+          >
+            Portfolio
+          </NavLink>
+        </nav>
+        <div className="flex items-center gap-2 pl-2 border-l border-slate-700">
+          {user ? (
+            <>
+              <span className="text-slate-400 text-xs sm:text-sm hidden sm:inline truncate max-w-[150px]">
+                {user.email}
+              </span>
+              <button
+                onClick={signOut}
+                className="px-2 sm:px-3 py-1.5 sm:py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/login"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors"
+            >
+              Sign in
+            </Link>
+          )}
+        </div>
+      </div>
     </header>
   );
 }
