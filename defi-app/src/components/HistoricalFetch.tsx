@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Pool, Filters, HeldPosition } from '../types/pool';
 import type { FetchProgress } from '../utils/historicalData';
-import { isCacheValid, getUncachedPoolIds } from '../utils/historicalData';
+import { isCacheValid, getUncachedPoolIds, clearCache, getCacheStats } from '../utils/historicalData';
 import { exportPoolsForAI, downloadExport, copyExportToClipboard } from '../utils/exportData';
 
 // Custom hook to track previous value
@@ -22,6 +22,7 @@ interface HistoricalFetchProps {
   onFetchComplete: () => void;
   onFetchPools: (poolIds: string[]) => Promise<void>;
   onCancelFetch: () => void;
+  onClearCache: () => void;
   isFetching: boolean;
   progress: FetchProgress | null;
   historicalDataVersion: number;
@@ -36,12 +37,14 @@ export function HistoricalFetch({
   onFetchComplete,
   onFetchPools,
   onCancelFetch,
+  onClearCache,
   isFetching,
   progress,
   historicalDataVersion,
 }: HistoricalFetchProps) {
   const [copied, setCopied] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
+  const [errorCount, setErrorCount] = useState(0);
 
   // Count how many visible pools have cached data (recalculate when version changes)
   const cachedVisibleCount = useMemo(() =>
@@ -58,15 +61,31 @@ export function HistoricalFetch({
   const needsFetching = uncachedPoolIds.length;
   const allLoaded = needsFetching === 0 && visiblePoolIds.length > 0;
 
-  // Show completion message briefly
+  // Track errors during fetch
+  useEffect(() => {
+    if (progress?.status === 'error') {
+      setErrorCount(c => c + 1);
+    }
+  }, [progress]);
+
+  // Show completion message briefly and reset error count
   const prevIsFetching = usePrevious(isFetching);
   useEffect(() => {
     if (prevIsFetching && !isFetching) {
       setJustCompleted(true);
-      const timer = setTimeout(() => setJustCompleted(false), 3000);
+      const timer = setTimeout(() => {
+        setJustCompleted(false);
+        setErrorCount(0);
+      }, 5000);
       return () => clearTimeout(timer);
     }
+    if (!prevIsFetching && isFetching) {
+      setErrorCount(0);
+    }
   }, [isFetching, prevIsFetching]);
+
+  // Get total cache size
+  const cacheStats = useMemo(() => getCacheStats(), [historicalDataVersion]);
 
   const handleFetchVisible = async () => {
     if (uncachedPoolIds.length === 0) return;
@@ -86,6 +105,13 @@ export function HistoricalFetch({
     await copyExportToClipboard(data);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleClearCache = () => {
+    if (confirm(`Clear all cached historical data? (${cacheStats.total} pools)`)) {
+      clearCache();
+      onClearCache();
+    }
   };
 
   // Only estimate time for uncached pools (3 parallel + 300ms between batches)
@@ -111,12 +137,13 @@ export function HistoricalFetch({
               </div>
               <span className="text-xs text-slate-400">
                 {progress.current}/{progress.total}
+                {errorCount > 0 && <span className="text-red-400 ml-1">({errorCount} failed)</span>}
               </span>
             </div>
           ) : (
-            <span className={`text-xs ${justCompleted ? 'text-green-400' : 'text-slate-500'}`}>
+            <span className={`text-xs ${justCompleted ? (errorCount > 0 ? 'text-yellow-400' : 'text-green-400') : 'text-slate-500'}`}>
               {cachedVisibleCount}/{visiblePoolIds.length} loaded
-              {justCompleted && ' ✓'}
+              {justCompleted && (errorCount > 0 ? ` (${errorCount} failed)` : ' ✓')}
             </span>
           )}
         </div>
@@ -167,6 +194,18 @@ export function HistoricalFetch({
               ↓
             </button>
           </div>
+
+          {/* Clear cache button */}
+          {cacheStats.total > 0 && (
+            <button
+              onClick={handleClearCache}
+              disabled={isFetching}
+              className="px-2 py-1.5 text-xs text-slate-400 hover:text-red-400 disabled:opacity-50"
+              title={`Clear cached data (${cacheStats.total} pools)`}
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 

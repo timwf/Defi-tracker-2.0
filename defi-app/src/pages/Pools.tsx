@@ -230,6 +230,7 @@ export function PoolsPage({
         }}
         onFetchPools={handleFetchPools}
         onCancelFetch={handleCancelFetch}
+        onClearCache={() => setHistoricalDataVersion((v) => v + 1)}
         isFetching={isFetchingHistorical}
         progress={fetchProgress}
         historicalDataVersion={historicalDataVersion}
