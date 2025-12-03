@@ -21,6 +21,7 @@ function App() {
   const [pools, setPools] = useState<Pool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [sortField, setSortField] = useState<SortField>('tvlUsd');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -48,6 +49,7 @@ function App() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data: PoolsResponse = await response.json();
       setPools(data.data);
+      setLastUpdated(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch pools');
     } finally {
@@ -93,7 +95,7 @@ function App() {
     <BrowserRouter>
       <div className="min-h-screen bg-slate-900 p-4">
         <div className="max-w-[1800px] mx-auto">
-          <NavHeader poolCount={pools.length} />
+          <NavHeader poolCount={pools.length} lastUpdated={lastUpdated} onRefresh={fetchPools} loading={loading} />
 
           {error && (
             <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded mb-4">
