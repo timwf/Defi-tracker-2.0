@@ -364,17 +364,52 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                           </div>
                         )}
 
-                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4 text-sm">
+                        {/* APY Sparkline - larger and more prominent */}
+                        {apyHistory.length >= 2 && (
+                          <div className="mt-3 bg-slate-900/50 rounded p-2">
+                            <div className="text-slate-500 text-xs mb-1">30-Day APY Trend</div>
+                            <Sparkline data={apyHistory} width={280} height={40} />
+                          </div>
+                        )}
+
+                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4 text-sm">
                           <div>
                             <div className="text-slate-400 text-xs">Amount</div>
                             <div className="text-white font-medium">{formatCurrency(position.amountUsd)}</div>
                           </div>
                           <div>
                             <div className="text-slate-400 text-xs">APY</div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-green-400 font-medium">{pool.apy.toFixed(2)}%</span>
-                              {apyHistory.length >= 2 && (
-                                <Sparkline data={apyHistory} width={40} height={14} />
+                            <div className="text-green-400 font-medium">{pool.apy.toFixed(2)}%</div>
+                          </div>
+                          <div>
+                            <div className="text-slate-400 text-xs">Base APY</div>
+                            <div className="text-slate-300 font-medium">{(pool.apyBase ?? 0).toFixed(2)}%</div>
+                          </div>
+                          <div>
+                            <div className="text-slate-400 text-xs">Reward APY</div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-purple-400 font-medium">{(pool.apyReward ?? 0).toFixed(2)}%</span>
+                              {pool.apy > 0 && (
+                                <span className="text-slate-500 text-xs">
+                                  ({((pool.apyReward ?? 0) / pool.apy * 100).toFixed(0)}%)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-slate-400 text-xs">Base90 Avg</div>
+                            <div className="flex items-center gap-1">
+                              {metrics?.base90 !== undefined ? (
+                                <>
+                                  <span className="text-cyan-400 font-medium">{metrics.base90.toFixed(2)}%</span>
+                                  {(pool.apyBase ?? 0) !== 0 && (
+                                    <span className={(pool.apyBase ?? 0) > metrics.base90 ? 'text-green-400' : 'text-red-400'}>
+                                      {(pool.apyBase ?? 0) > metrics.base90 ? '↑' : '↓'}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-slate-500">-</span>
                               )}
                             </div>
                           </div>
@@ -402,7 +437,7 @@ export function Portfolio({ positions, pools, onPositionsChange }: PortfolioProp
                             <div className="text-emerald-400 font-medium">{formatCurrency(projectedEarning)}</div>
                           </div>
                           {position.notes && (
-                            <div className="col-span-2 sm:col-span-3 md:col-span-5">
+                            <div className="col-span-2 sm:col-span-3 md:col-span-6">
                               <div className="text-slate-400 text-xs">Notes</div>
                               <div className="text-slate-300 text-xs">{position.notes}</div>
                             </div>

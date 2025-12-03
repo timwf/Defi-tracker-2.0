@@ -1,6 +1,22 @@
 import type { Pool, SortField, SortDirection, CalculatedMetrics } from '../types/pool';
 import { formatTvl, formatApy, formatChange, formatSigma, formatPrediction } from '../utils/filterPools';
 import { getPoolMetrics, getCacheAge, getCachedData } from '../utils/historicalData';
+import { Sparkline } from './Sparkline';
+
+function getRewardPct(pool: Pool): number | null {
+  if (pool.apy === 0 || pool.apy === null) return null;
+  const reward = pool.apyReward ?? 0;
+  return (reward / pool.apy) * 100;
+}
+
+function getApyHistory(poolId: string): number[] {
+  const cached = getCachedData(poolId);
+  if (!cached?.data) return [];
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  return cached.data
+    .filter(d => new Date(d.timestamp).getTime() >= thirtyDaysAgo)
+    .map(d => d.apy);
+}
 
 interface PoolTableProps {
   pools: Pool[];
@@ -85,6 +101,8 @@ export function PoolTable({
     const hasHistoricalData = getCachedData(pool.pool) !== null;
     const isFetching = fetchingPoolId === pool.pool;
     const isHeld = heldPoolIds.includes(pool.pool);
+    const apyHistory = getApyHistory(pool.pool);
+    const rewardPct = getRewardPct(pool);
 
     return (
       <div className={`bg-slate-800 rounded-lg p-3 ${isHeld ? 'ring-1 ring-yellow-500/50' : ''}`}>
@@ -106,7 +124,12 @@ export function PoolTable({
             </div>
           </div>
           <div className="text-right">
-            <div className="text-green-400 font-bold">{formatApy(pool.apy)}</div>
+            <div className="flex items-center justify-end gap-2">
+              <span className="text-green-400 font-bold">{formatApy(pool.apy)}</span>
+              {apyHistory.length >= 2 && (
+                <Sparkline data={apyHistory} width={50} height={18} />
+              )}
+            </div>
             <div className="text-xs text-slate-400">{formatTvl(pool.tvlUsd)}</div>
           </div>
         </div>
@@ -118,7 +141,10 @@ export function PoolTable({
           </div>
           <div>
             <div className="text-slate-500">Reward</div>
-            <div className="text-purple-400">{formatApy(pool.apyReward)}</div>
+            <div className="text-purple-400">
+              {formatApy(pool.apyReward)}
+              {rewardPct !== null && <span className="text-slate-500 ml-1">({rewardPct.toFixed(0)}%)</span>}
+            </div>
           </div>
           <div>
             <div className="text-slate-500">1D</div>
@@ -336,9 +362,25 @@ export function PoolTable({
                 <td className="px-3 py-2 text-xs text-slate-300">{pool.project}</td>
                 <td className="px-3 py-2 text-xs text-slate-300">{pool.chain}</td>
                 <td className="px-3 py-2 text-xs text-slate-300">{formatTvl(pool.tvlUsd)}</td>
-                <td className="px-3 py-2 text-sm font-medium text-green-400">{formatApy(pool.apy)}</td>
+                <td className="px-3 py-2 text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-400">{formatApy(pool.apy)}</span>
+                    {(() => {
+                      const apyHistory = getApyHistory(pool.pool);
+                      return apyHistory.length >= 2 ? <Sparkline data={apyHistory} width={50} height={18} /> : null;
+                    })()}
+                  </div>
+                </td>
                 <td className="px-3 py-2 text-xs text-slate-300">{formatApy(pool.apyBase)}</td>
-                <td className="px-3 py-2 text-xs text-purple-400">{formatApy(pool.apyReward)}</td>
+                <td className="px-3 py-2 text-xs">
+                  <div className="flex items-center gap-1">
+                    <span className="text-purple-400">{formatApy(pool.apyReward)}</span>
+                    {(() => {
+                      const rewardPct = getRewardPct(pool);
+                      return rewardPct !== null ? <span className="text-slate-500">({rewardPct.toFixed(0)}%)</span> : null;
+                    })()}
+                  </div>
+                </td>
                 {/* Historical data columns */}
                 <td className="px-3 py-2 text-xs">
                   {metrics?.base90 !== undefined ? (
