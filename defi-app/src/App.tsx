@@ -153,6 +153,18 @@ function AppContent() {
       return;
     }
 
+    // Save scroll position before state changes
+    const scrollY = window.scrollY;
+
+    // Temporarily lock scroll position using CSS
+    const html = document.documentElement;
+    html.style.scrollBehavior = 'auto';
+    html.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+
     if (isCurrentlyHeld) {
       await removePositionFromDb(poolId);
     } else {
@@ -160,6 +172,17 @@ function AppContent() {
     }
     const positions = await fetchPositions();
     setHeldPositions(positions);
+
+    // Restore scroll after React re-renders
+    requestAnimationFrame(() => {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      html.style.overflow = '';
+      html.style.scrollBehavior = '';
+      window.scrollTo(0, scrollY);
+    });
   }, [user, navigate]);
 
   const handlePositionsChange = useCallback(async (positions: HeldPosition[]) => {

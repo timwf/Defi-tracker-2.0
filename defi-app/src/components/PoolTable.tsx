@@ -116,6 +116,7 @@ export function PoolTable({
             <div className="flex items-center gap-2">
               {onToggleHeld && (
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -419,6 +420,7 @@ export function PoolTable({
                   <div className="flex items-center gap-1.5">
                     {onToggleHeld && (
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
