@@ -45,16 +45,53 @@ export function invalidateMemoryCache(): void {
 
 export function saveToCache(poolId: string, data: HistoricalDataPoint[]): void {
   const cache = getCache();
+
+  // Only keep last 90 days of data to save space
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const trimmedData = data.filter(d => new Date(d.timestamp) >= ninetyDaysAgo);
+
   cache[poolId] = {
     poolId,
-    data,
+    data: trimmedData,
     fetchedAt: Date.now(),
   };
-  localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+
+  // Prune expired entries before saving
+  const now = Date.now();
+  for (const id of Object.keys(cache)) {
+    if (now - cache[id].fetchedAt > CACHE_EXPIRY_MS) {
+      delete cache[id];
+    }
+  }
+
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch (e) {
+    // Quota exceeded - clear oldest entries and retry
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      pruneOldestEntries(cache, 10);
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+      } catch {
+        // Still failing - clear half the cache
+        pruneOldestEntries(cache, Math.floor(Object.keys(cache).length / 2));
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+      }
+    }
+  }
+
   invalidateMemoryCache(); // Force refresh on next read
   // Clear the memoized metrics for this pool
   metricsCache.delete(poolId);
   metricsCacheVersion++;
+}
+
+// Remove oldest N entries from cache
+function pruneOldestEntries(cache: Record<string, PoolHistoricalData>, count: number): void {
+  const entries = Object.entries(cache).sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
+  for (let i = 0; i < Math.min(count, entries.length); i++) {
+    delete cache[entries[i][0]];
+  }
 }
 
 export function getCachedData(poolId: string): PoolHistoricalData | null {
@@ -115,35 +152,56 @@ export interface FetchProgress {
 export async function fetchMultiplePoolsHistory(
   poolIds: string[],
   onProgress: (progress: FetchProgress) => void,
-  delayMs = 1500,
-  forceRefresh = false
+  batchSize = 3,
+  forceRefresh = false,
+  signal?: AbortSignal
 ): Promise<Map<string, HistoricalDataPoint[]>> {
   const results = new Map<string, HistoricalDataPoint[]>();
+  let completed = 0;
 
-  for (let i = 0; i < poolIds.length; i++) {
-    const poolId = poolIds[i];
+  // Process in batches for parallel fetching
+  for (let i = 0; i < poolIds.length; i += batchSize) {
+    if (signal?.aborted) break;
 
-    try {
-      // Check cache first
-      if (!forceRefresh && isCacheValid(poolId)) {
-        const cached = getCachedData(poolId);
-        results.set(poolId, cached?.data || []);
-        onProgress({ current: i + 1, total: poolIds.length, poolId, status: 'cached' });
-      } else {
-        onProgress({ current: i + 1, total: poolIds.length, poolId, status: 'fetching' });
-        const data = await fetchPoolHistory(poolId);
-        saveToCache(poolId, data);
-        results.set(poolId, data);
+    const batch = poolIds.slice(i, i + batchSize);
 
-        // Rate limit delay (skip on last item)
-        if (i < poolIds.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, delayMs));
+    // Process batch in parallel
+    const batchPromises = batch.map(async (poolId) => {
+      if (signal?.aborted) return;
+
+      try {
+        // Check cache first
+        if (!forceRefresh && isCacheValid(poolId)) {
+          const cached = getCachedData(poolId);
+          results.set(poolId, cached?.data || []);
+          completed++;
+          onProgress({ current: completed, total: poolIds.length, poolId, status: 'cached' });
+        } else {
+          const data = await fetchPoolHistory(poolId);
+          saveToCache(poolId, data);
+          results.set(poolId, data);
+          completed++;
+          onProgress({ current: completed, total: poolIds.length, poolId, status: 'fetching' });
         }
+      } catch (error) {
+        console.error(`Failed to fetch ${poolId}:`, error);
+        completed++;
+        onProgress({ current: completed, total: poolIds.length, poolId, status: 'error' });
+        results.set(poolId, []);
       }
-    } catch (error) {
-      console.error(`Failed to fetch ${poolId}:`, error);
-      onProgress({ current: i + 1, total: poolIds.length, poolId, status: 'error' });
-      results.set(poolId, []);
+    });
+
+    await Promise.all(batchPromises);
+
+    // Delay between batches to avoid CORS/rate limit issues
+    if (i + batchSize < poolIds.length && !signal?.aborted) {
+      await new Promise((resolve) => {
+        const timeout = setTimeout(resolve, 300);
+        signal?.addEventListener('abort', () => {
+          clearTimeout(timeout);
+          resolve(undefined);
+        });
+      });
     }
   }
 
@@ -253,6 +311,11 @@ export function getCacheStats(): { total: number; valid: number; poolIds: string
   const poolIds = Object.keys(cache);
   const valid = poolIds.filter(id => isCacheValid(id)).length;
   return { total: poolIds.length, valid, poolIds };
+}
+
+// Get pool IDs that don't have valid cache (need fetching)
+export function getUncachedPoolIds(poolIds: string[]): string[] {
+  return poolIds.filter(id => !isCacheValid(id));
 }
 
 // Clear all cached data

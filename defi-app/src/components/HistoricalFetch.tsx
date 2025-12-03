@@ -1,8 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Pool, Filters, HeldPosition } from '../types/pool';
 import type { FetchProgress } from '../utils/historicalData';
-import { getCacheStats } from '../utils/historicalData';
+import { isCacheValid, getUncachedPoolIds } from '../utils/historicalData';
 import { exportPoolsForAI, downloadExport, copyExportToClipboard } from '../utils/exportData';
+
+// Custom hook to track previous value
+function usePrevious<T>(value: T): T | undefined {
+  const ref = useRef<T>();
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
+}
 
 interface HistoricalFetchProps {
   visiblePoolIds: string[];
@@ -11,8 +20,11 @@ interface HistoricalFetchProps {
   heldPositions: HeldPosition[];
   onFetchStart: () => void;
   onFetchComplete: () => void;
-  onFetchPools: (poolIds: string[], onProgress: (p: FetchProgress) => void) => Promise<void>;
+  onFetchPools: (poolIds: string[]) => Promise<void>;
+  onCancelFetch: () => void;
   isFetching: boolean;
+  progress: FetchProgress | null;
+  historicalDataVersion: number;
 }
 
 export function HistoricalFetch({
@@ -23,23 +35,44 @@ export function HistoricalFetch({
   onFetchStart,
   onFetchComplete,
   onFetchPools,
+  onCancelFetch,
   isFetching,
+  progress,
+  historicalDataVersion,
 }: HistoricalFetchProps) {
-  const [progress, setProgress] = useState<FetchProgress | null>(null);
   const [copied, setCopied] = useState(false);
-  const cacheStats = getCacheStats();
+  const [justCompleted, setJustCompleted] = useState(false);
+
+  // Count how many visible pools have cached data (recalculate when version changes)
+  const cachedVisibleCount = useMemo(() =>
+    visiblePoolIds.filter(id => isCacheValid(id)).length,
+    [visiblePoolIds, historicalDataVersion]
+  );
+
+  // Get uncached pool IDs
+  const uncachedPoolIds = useMemo(() =>
+    getUncachedPoolIds(visiblePoolIds),
+    [visiblePoolIds, historicalDataVersion]
+  );
+
+  const needsFetching = uncachedPoolIds.length;
+  const allLoaded = needsFetching === 0 && visiblePoolIds.length > 0;
+
+  // Show completion message briefly
+  const prevIsFetching = usePrevious(isFetching);
+  useEffect(() => {
+    if (prevIsFetching && !isFetching) {
+      setJustCompleted(true);
+      const timer = setTimeout(() => setJustCompleted(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isFetching, prevIsFetching]);
 
   const handleFetchVisible = async () => {
-    if (visiblePoolIds.length === 0) return;
+    if (uncachedPoolIds.length === 0) return;
 
     onFetchStart();
-    setProgress({ current: 0, total: visiblePoolIds.length, poolId: '', status: 'fetching' });
-
-    await onFetchPools(visiblePoolIds, (p) => {
-      setProgress(p);
-    });
-
-    setProgress(null);
+    await onFetchPools(uncachedPoolIds);
     onFetchComplete();
   };
 
@@ -55,7 +88,9 @@ export function HistoricalFetch({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const estimatedTime = Math.ceil((visiblePoolIds.length * 1.5) / 60);
+  // Only estimate time for uncached pools (3 parallel + 300ms between batches)
+  const estimatedSeconds = Math.ceil(needsFetching / 3) * 0.6; // ~0.6s per batch of 3
+  const estimatedTime = Math.ceil(estimatedSeconds / 60);
 
   return (
     <div className="bg-slate-800 p-3 rounded-lg mb-4">
@@ -64,10 +99,9 @@ export function HistoricalFetch({
           <span className="text-sm text-slate-300">
             Historical
           </span>
-          <span className="text-xs text-slate-500">
-            {cacheStats.valid} cached
-          </span>
-          {isFetching && progress && (
+
+          {/* Status: loaded count or progress */}
+          {isFetching && progress ? (
             <div className="flex items-center gap-2">
               <div className="w-20 sm:w-32 bg-slate-700 rounded-full h-2">
                 <div
@@ -79,25 +113,41 @@ export function HistoricalFetch({
                 {progress.current}/{progress.total}
               </span>
             </div>
+          ) : (
+            <span className={`text-xs ${justCompleted ? 'text-green-400' : 'text-slate-500'}`}>
+              {cachedVisibleCount}/{visiblePoolIds.length} loaded
+              {justCompleted && ' ✓'}
+            </span>
           )}
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          <button
-            onClick={handleFetchVisible}
-            disabled={isFetching || visiblePoolIds.length === 0}
-            className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm bg-purple-600 text-white rounded hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 sm:gap-2"
-          >
-            {isFetching ? (
-              'Fetching...'
-            ) : (
-              <>
-                <span className="hidden sm:inline">Fetch Historical</span>
-                <span className="sm:hidden">Fetch</span>
-                <span>({visiblePoolIds.length})</span>
-              </>
-            )}
-          </button>
+          {isFetching ? (
+            <button
+              onClick={() => {
+                onCancelFetch();
+                onFetchComplete();
+              }}
+              className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm bg-red-600 text-white rounded hover:bg-red-500 flex items-center gap-1 sm:gap-2"
+            >
+              Cancel
+            </button>
+          ) : (
+            <button
+              onClick={handleFetchVisible}
+              disabled={allLoaded || visiblePoolIds.length === 0}
+              className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm bg-purple-600 text-white rounded hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 sm:gap-2"
+            >
+              {allLoaded ? (
+                'All Loaded'
+              ) : (
+                <>
+                  <span className="hidden sm:inline">Fetch</span>
+                  <span>({needsFetching})</span>
+                </>
+              )}
+            </button>
+          )}
 
           <div className="flex items-center">
             <button
@@ -120,9 +170,9 @@ export function HistoricalFetch({
         </div>
       </div>
 
-      {!isFetching && visiblePoolIds.length > 10 && (
+      {!isFetching && needsFetching > 5 && (
         <p className="text-xs text-slate-500 mt-2 hidden sm:block">
-          Est. time: ~{estimatedTime} min (1.5s delay per request)
+          Est. time: ~{estimatedSeconds < 60 ? `${Math.ceil(estimatedSeconds)}s` : `${estimatedTime} min`}
         </p>
       )}
     </div>

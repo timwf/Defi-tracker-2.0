@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import type { Pool, PoolsResponse, Filters, SortField, SortDirection, SavedView, HeldPosition } from './types/pool';
+import type { FetchProgress } from './utils/historicalData';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NavHeader } from './components/NavHeader';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -46,6 +47,7 @@ function AppContent() {
 
   // Historical data state
   const [isFetchingHistorical, setIsFetchingHistorical] = useState(false);
+  const [fetchProgress, setFetchProgress] = useState<FetchProgress | null>(null);
   const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
   const [historicalDataVersion, setHistoricalDataVersion] = useState(0);
 
@@ -213,6 +215,8 @@ function AppContent() {
                 onToggleHeld={handleToggleHeld}
                 isFetchingHistorical={isFetchingHistorical}
                 setIsFetchingHistorical={setIsFetchingHistorical}
+                fetchProgress={fetchProgress}
+                setFetchProgress={setFetchProgress}
                 fetchingPoolId={fetchingPoolId}
                 setFetchingPoolId={setFetchingPoolId}
                 historicalDataVersion={historicalDataVersion}

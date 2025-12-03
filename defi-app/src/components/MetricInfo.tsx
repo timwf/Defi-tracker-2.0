@@ -9,13 +9,14 @@ interface MetricInfoProps {
   value?: any;
   pool?: Pool;
   metrics?: CalculatedMetrics;
+  isNewPool?: boolean;
 }
 
-export function MetricInfo({ metric, value, pool, metrics }: MetricInfoProps) {
+export function MetricInfo({ metric, value, pool, metrics, isNewPool }: MetricInfoProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showDetailed, setShowDetailed] = useState(false);
 
-  const info = getMetricInfo(metric, value, pool, metrics);
+  const info = getMetricInfo(metric, value, pool, metrics, isNewPool);
 
   return (
     <>

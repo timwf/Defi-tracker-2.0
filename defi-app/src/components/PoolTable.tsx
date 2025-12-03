@@ -99,7 +99,11 @@ export function PoolTable({
   // Mobile card view component
   const MobilePoolCard = ({ pool }: { pool: Pool }) => {
     const metrics: CalculatedMetrics | null = getPoolMetrics(pool.pool);
-    const hasHistoricalData = getCachedData(pool.pool) !== null;
+    const cachedData = getCachedData(pool.pool);
+    const hasHistoricalData = cachedData !== null;
+    const dataPoints = cachedData?.data?.length || 0;
+    const hasEnoughData = dataPoints >= 7;
+    const fetchStatus = !hasHistoricalData ? 'none' : hasEnoughData ? 'good' : 'limited';
     const isFetching = fetchingPoolId === pool.pool;
     const isHeld = heldPoolIds.includes(pool.pool);
     const apyHistory = getApyHistory(pool.pool);
@@ -242,12 +246,19 @@ export function PoolTable({
                 className={`px-2 py-1 rounded text-xs ${
                   isFetching
                     ? 'bg-purple-600 text-white'
-                    : hasHistoricalData
+                    : fetchStatus === 'good' || fetchStatus === 'limited'
                     ? 'bg-green-900/50 text-green-400'
                     : 'bg-slate-700 text-slate-400'
                 }`}
+                title={
+                  fetchStatus === 'good'
+                    ? `${dataPoints} days of data`
+                    : fetchStatus === 'limited'
+                    ? `New pool - only ${dataPoints} days of data available`
+                    : 'Fetch historical data'
+                }
               >
-                {isFetching ? '...' : hasHistoricalData ? '✓ Data' : '↓ Fetch'}
+                {isFetching ? '...' : fetchStatus === 'good' ? `✓ ${dataPoints}d` : fetchStatus === 'limited' ? `✓ ${dataPoints}d` : '↓ Fetch'}
               </button>
             )}
           </div>
@@ -360,10 +371,16 @@ export function PoolTable({
 
             // Get historical metrics if available
             const metrics: CalculatedMetrics | null = getPoolMetrics(pool.pool);
-            const hasHistoricalData = getCachedData(pool.pool) !== null;
+            const cachedData = getCachedData(pool.pool);
+            const hasHistoricalData = cachedData !== null;
+            const dataPoints = cachedData?.data?.length || 0;
+            const hasEnoughData = dataPoints >= 7;
             const cacheAge = hasHistoricalData ? getCacheAge(pool.pool) : null;
             const isFetching = fetchingPoolId === pool.pool;
             const isHeld = heldPoolIds.includes(pool.pool);
+
+            // Determine fetch status: not fetched, fetched but limited data, fetched with good data
+            const fetchStatus = !hasHistoricalData ? 'none' : hasEnoughData ? 'good' : 'limited';
 
             return (
               <tr key={pool.pool} className={`hover:bg-slate-800/50 transition-colors ${isHeld ? 'bg-yellow-900/20' : ''}`}>
@@ -375,19 +392,21 @@ export function PoolTable({
                       className={`w-6 h-6 rounded text-xs flex items-center justify-center transition-colors ${
                         isFetching
                           ? 'bg-purple-600 text-white animate-pulse'
-                          : hasHistoricalData
+                          : fetchStatus === 'good' || fetchStatus === 'limited'
                           ? 'bg-green-900/50 text-green-400 hover:bg-green-800/50'
                           : 'bg-slate-700 text-slate-400 hover:bg-purple-600 hover:text-white'
                       }`}
                       title={
                         isFetching
                           ? 'Fetching...'
-                          : hasHistoricalData
-                          ? `Data cached ${cacheAge}`
+                          : fetchStatus === 'good'
+                          ? `${dataPoints} days of data (${cacheAge})`
+                          : fetchStatus === 'limited'
+                          ? `New pool - only ${dataPoints} days of data (${cacheAge})`
                           : 'Fetch historical data'
                       }
                     >
-                      {isFetching ? '...' : hasHistoricalData ? '✓' : '↓'}
+                      {isFetching ? '...' : fetchStatus === 'good' || fetchStatus === 'limited' ? '✓' : '↓'}
                     </button>
                   )}
                 </td>
@@ -476,34 +495,34 @@ export function PoolTable({
                           </span>
                         )}
                       </>
-                    ) : '-'}
-                    <MetricInfo metric="avg90" value={metrics?.base90} pool={pool} metrics={metrics ?? undefined} />
+                    ) : fetchStatus === 'limited' ? <span className="text-blue-400">New</span> : '-'}
+                    <MetricInfo metric="avg90" value={metrics?.base90} pool={pool} metrics={metrics ?? undefined} isNewPool={fetchStatus === 'limited'} />
                   </div>
                 </td>
                 <td className="px-3 py-2 text-xs text-slate-400 group">
                   <div className="flex items-center gap-1">
-                    {metrics?.dataPoints !== undefined ? metrics.dataPoints : '-'}
-                    <MetricInfo metric="days" value={metrics?.dataPoints} pool={pool} metrics={metrics ?? undefined} />
+                    {metrics?.dataPoints !== undefined ? metrics.dataPoints : fetchStatus === 'limited' ? <span className="text-blue-400">New</span> : '-'}
+                    <MetricInfo metric="days" value={metrics?.dataPoints} pool={pool} metrics={metrics ?? undefined} isNewPool={fetchStatus === 'limited'} />
                   </div>
                 </td>
-                <td className={`px-3 py-2 text-xs ${getVolatilityColor(metrics?.volatility)} group`}>
+                <td className={`px-3 py-2 text-xs ${metrics?.volatility !== undefined ? getVolatilityColor(metrics.volatility) : ''} group`}>
                   <div className="flex items-center gap-1">
-                    {formatMetricValue(metrics?.volatility, '')}
-                    <MetricInfo metric="volatility" value={metrics?.volatility} pool={pool} metrics={metrics ?? undefined} />
+                    {metrics?.volatility !== undefined ? formatMetricValue(metrics.volatility, '') : fetchStatus === 'limited' ? <span className="text-blue-400">New</span> : '-'}
+                    <MetricInfo metric="volatility" value={metrics?.volatility} pool={pool} metrics={metrics ?? undefined} isNewPool={fetchStatus === 'limited'} />
                   </div>
                 </td>
-                <td className={`px-3 py-2 text-xs ${getOrganicColor(metrics?.organicPct)} group`}>
+                <td className={`px-3 py-2 text-xs ${metrics?.organicPct !== undefined ? getOrganicColor(metrics.organicPct) : ''} group`}>
                   <div className="flex items-center gap-1">
-                    {metrics?.organicPct !== undefined ? `${metrics.organicPct}%` : '-'}
-                    <MetricInfo metric="organicPct" value={metrics?.organicPct} pool={pool} metrics={metrics ?? undefined} />
+                    {metrics?.organicPct !== undefined ? `${metrics.organicPct}%` : fetchStatus === 'limited' ? <span className="text-blue-400">New</span> : '-'}
+                    <MetricInfo metric="organicPct" value={metrics?.organicPct} pool={pool} metrics={metrics ?? undefined} isNewPool={fetchStatus === 'limited'} />
                   </div>
                 </td>
-                <td className={`px-3 py-2 text-xs ${getTvlFlowColor(metrics?.tvlChange30d)} group`}>
+                <td className={`px-3 py-2 text-xs ${metrics?.tvlChange30d !== undefined ? getTvlFlowColor(metrics.tvlChange30d) : ''} group`}>
                   <div className="flex items-center gap-1">
                     {metrics?.tvlChange30d !== undefined
                       ? `${metrics.tvlChange30d >= 0 ? '+' : ''}${metrics.tvlChange30d}%`
-                      : '-'}
-                    <MetricInfo metric="tvlChange" value={metrics?.tvlChange30d} pool={pool} metrics={metrics ?? undefined} />
+                      : fetchStatus === 'limited' ? <span className="text-blue-400">New</span> : '-'}
+                    <MetricInfo metric="tvlChange" value={metrics?.tvlChange30d} pool={pool} metrics={metrics ?? undefined} isNewPool={fetchStatus === 'limited'} />
                   </div>
                 </td>
                 {/* Standard columns */}

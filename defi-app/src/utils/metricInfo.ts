@@ -334,7 +334,8 @@ export function getMetricInfo(
   metric: MetricType,
   value?: any,
   pool?: Pool,
-  metrics?: CalculatedMetrics
+  metrics?: CalculatedMetrics,
+  isNewPool?: boolean
 ): { title: string; brief: string; detailed: string; interpretation?: string } {
   const def = metricDefinitions[metric];
   if (!def) {
@@ -342,6 +343,17 @@ export function getMetricInfo(
       title: metric,
       brief: 'No information available for this metric.',
       detailed: '',
+    };
+  }
+
+  // For historical metrics, show "New pool" message when pool has limited data
+  const historicalMetrics = ['avg90', 'days', 'volatility', 'organicPct', 'tvlChange'];
+  if (isNewPool && historicalMetrics.includes(metric) && value == null) {
+    return {
+      title: def.title,
+      brief: def.brief,
+      detailed: def.detailed,
+      interpretation: 'New pool - not enough historical data available yet. Metrics require at least 7 days of data.',
     };
   }
 

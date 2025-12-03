@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useRef } from 'react';
 import type { Pool, Filters, SortField, SortDirection, SavedView, HeldPosition } from '../types/pool';
 import { FiltersPanel } from '../components/Filters';
 import { PoolTable } from '../components/PoolTable';
@@ -24,6 +24,8 @@ interface PoolsPageProps {
   onToggleHeld: (poolId: string, isHeld: boolean) => void;
   isFetchingHistorical: boolean;
   setIsFetchingHistorical: (v: boolean) => void;
+  fetchProgress: FetchProgress | null;
+  setFetchProgress: (p: FetchProgress | null) => void;
   fetchingPoolId: string | null;
   setFetchingPoolId: (id: string | null) => void;
   historicalDataVersion: number;
@@ -47,6 +49,8 @@ export function PoolsPage({
   onToggleHeld,
   isFetchingHistorical,
   setIsFetchingHistorical,
+  fetchProgress,
+  setFetchProgress,
   fetchingPoolId,
   setFetchingPoolId,
   historicalDataVersion,
@@ -56,6 +60,9 @@ export function PoolsPage({
     () => heldPositions.map((p) => p.poolId),
     [heldPositions]
   );
+
+  // AbortController for cancelling fetch
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const allChains = useMemo(() => getUniqueChains(pools), [pools]);
   const allProjects = useMemo(() => getUniqueProjects(pools), [pools]);
@@ -148,12 +155,38 @@ export function PoolsPage({
   };
 
   const handleFetchPools = useCallback(
-    async (poolIds: string[], onProgress: (p: FetchProgress) => void) => {
-      await fetchMultiplePoolsHistory(poolIds, onProgress);
+    async (poolIds: string[]) => {
+      // Create new AbortController for this fetch
+      abortControllerRef.current = new AbortController();
+
+      // Set initial progress with correct total (only uncached pools)
+      setFetchProgress({ current: 0, total: poolIds.length, poolId: '', status: 'fetching' });
+
+      await fetchMultiplePoolsHistory(
+        poolIds,
+        (p) => {
+          setFetchProgress(p);
+          // Update version after each fetch so table populates incrementally
+          if (p.status === 'fetching' || p.status === 'cached') {
+            setHistoricalDataVersion((v) => v + 1);
+          }
+        },
+        3, // batch size - fetch 3 in parallel
+        false,
+        abortControllerRef.current.signal
+      );
       setHistoricalDataVersion((v) => v + 1);
+      abortControllerRef.current = null;
     },
-    [setHistoricalDataVersion]
+    [setHistoricalDataVersion, setFetchProgress]
   );
+
+  const handleCancelFetch = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  }, []);
 
   const handleFetchSinglePool = useCallback(async (poolId: string) => {
     setFetchingPoolId(poolId);
@@ -188,10 +221,18 @@ export function PoolsPage({
         visiblePools={visiblePools}
         filters={filters}
         heldPositions={heldPositions}
-        onFetchStart={() => setIsFetchingHistorical(true)}
-        onFetchComplete={() => setIsFetchingHistorical(false)}
+        onFetchStart={() => {
+          setIsFetchingHistorical(true);
+        }}
+        onFetchComplete={() => {
+          setIsFetchingHistorical(false);
+          setFetchProgress(null);
+        }}
         onFetchPools={handleFetchPools}
+        onCancelFetch={handleCancelFetch}
         isFetching={isFetchingHistorical}
+        progress={fetchProgress}
+        historicalDataVersion={historicalDataVersion}
       />
 
       <div className="mb-4 text-sm text-slate-400">
