@@ -45,7 +45,7 @@ export function InfoModal({ isOpen, onClose, title, children }: InfoModalProps) 
             &times;
           </button>
         </div>
-        <div className="p-4 text-slate-300 text-sm leading-relaxed">
+        <div className="p-4 text-slate-300 text-sm leading-relaxed text-left">
           {children}
         </div>
       </div>

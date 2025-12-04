@@ -123,6 +123,12 @@ export function useUrlFilters() {
     setSearchParams(params, { replace: true });
   }, [filters, sortField, setSearchParams]);
 
+  // Set both sort field and direction at once (needed when changing columns)
+  const setSort = useCallback((newSortField: SortField, newSortDirection: SortDirection) => {
+    const params = filtersToUrlParams(filters, newSortField, newSortDirection);
+    setSearchParams(params, { replace: true });
+  }, [filters, setSearchParams]);
+
   // Clear all filters and reset to defaults
   const clearFilters = useCallback(() => {
     setSearchParams(new URLSearchParams(), { replace: true });
@@ -141,6 +147,7 @@ export function useUrlFilters() {
     setSortField,
     sortDirection,
     setSortDirection,
+    setSort,
     hasActiveFilters,
     clearFilters,
     applyView,

@@ -13,9 +13,8 @@ interface PoolsPageProps {
   filters: Filters;
   setFilters: (filters: Filters) => void;
   sortField: SortField;
-  setSortField: (field: SortField) => void;
   sortDirection: SortDirection;
-  setSortDirection: (dir: SortDirection) => void;
+  setSort: (field: SortField, direction: SortDirection) => void;
   savedViews: SavedView[];
   onSaveView: (name: string) => void;
   onLoadView: (view: SavedView) => void;
@@ -40,9 +39,8 @@ export function PoolsPage({
   filters,
   setFilters,
   sortField,
-  setSortField,
   sortDirection,
-  setSortDirection,
+  setSort,
   savedViews,
   onSaveView,
   onLoadView,
@@ -151,10 +149,11 @@ export function PoolsPage({
 
   const handleSort = (field: SortField) => {
     if (field === sortField) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      // Toggle direction for same field
+      setSort(field, sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      setSortField(field);
-      setSortDirection('desc');
+      // New field, default to desc
+      setSort(field, 'desc');
     }
   };
 

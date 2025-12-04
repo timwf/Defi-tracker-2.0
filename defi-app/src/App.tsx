@@ -40,6 +40,7 @@ function AppContent() {
     setSortField,
     sortDirection,
     setSortDirection,
+    setSort,
     hasActiveFilters,
     clearFilters,
     applyView,
@@ -261,9 +262,8 @@ function AppContent() {
                 filters={filters}
                 setFilters={setFilters}
                 sortField={sortField}
-                setSortField={setSortField}
                 sortDirection={sortDirection}
-                setSortDirection={setSortDirection}
+                setSort={setSort}
                 savedViews={savedViews}
                 onSaveView={handleSaveView}
                 onLoadView={handleLoadView}
