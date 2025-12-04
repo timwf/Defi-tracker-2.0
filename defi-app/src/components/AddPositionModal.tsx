@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Pool } from '../types/pool';
 
 interface AddPositionModalProps {
@@ -15,25 +15,30 @@ export function AddPositionModal({ isOpen, onClose, onAdd, pool }: AddPositionMo
     return new Date().toISOString().split('T')[0];
   });
 
-  const handleEscape = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onClose();
-    }
-  }, [onClose]);
+  // Use ref to avoid recreating the handler
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'hidden';
-      // Reset form when opening
-      setAmountUsd('');
-      setEntryDate(new Date().toISOString().split('T')[0]);
-    }
+    if (!isOpen) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCloseRef.current();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    document.body.style.overflow = 'hidden';
+    // Reset form when opening
+    setAmountUsd('');
+    setEntryDate(new Date().toISOString().split('T')[0]);
+
     return () => {
       document.removeEventListener('keydown', handleEscape);
       document.body.style.overflow = '';
     };
-  }, [isOpen, handleEscape]);
+  }, [isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +95,7 @@ export function AddPositionModal({ isOpen, onClose, onAdd, pool }: AddPositionMo
                 placeholder="0.00"
                 min="0"
                 step="0.01"
-                className="w-full pl-7 pr-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-7 pr-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 autoFocus
               />
             </div>
@@ -110,7 +115,7 @@ export function AddPositionModal({ isOpen, onClose, onAdd, pool }: AddPositionMo
               value={entryDate}
               onChange={(e) => setEntryDate(e.target.value)}
               max={new Date().toISOString().split('T')[0]}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <p className="text-xs text-slate-500 mt-1">
               When did you enter this position?
