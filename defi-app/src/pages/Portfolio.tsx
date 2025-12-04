@@ -126,6 +126,22 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     }, 0);
   }, [positionsWithPools, totalValue]);
 
+  // Calculate yesterday's weighted APY for comparison
+  const yesterdayWeightedApy = useMemo(() => {
+    if (totalValue === 0) return null;
+    let hasYesterdayData = false;
+    const weighted = positionsWithPools.reduce((sum, { position, yesterdayApy }) => {
+      if (yesterdayApy !== null) {
+        hasYesterdayData = true;
+        return sum + (yesterdayApy * position.amountUsd / totalValue);
+      }
+      return sum;
+    }, 0);
+    return hasYesterdayData ? weighted : null;
+  }, [positionsWithPools, totalValue]);
+
+  const weightedApyChange = yesterdayWeightedApy !== null ? weightedApy - yesterdayWeightedApy : null;
+
   const projectedAnnualEarnings = totalValue * (weightedApy / 100);
   const projectedDailyEarnings = projectedAnnualEarnings / 365;
 
@@ -270,7 +286,14 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
             Weighted APY
             <MetricInfo metric="weightedApy" value={weightedApy} />
           </div>
-          <div className="text-lg md:text-2xl font-bold text-green-400">{weightedApy.toFixed(2)}%</div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg md:text-2xl font-bold text-green-400">{weightedApy.toFixed(2)}%</span>
+            {weightedApyChange !== null && (
+              <span className={`text-xs md:text-sm ${weightedApyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {weightedApyChange >= 0 ? '↑' : '↓'}{Math.abs(weightedApyChange).toFixed(2)}
+              </span>
+            )}
+          </div>
         </div>
         <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
           <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
