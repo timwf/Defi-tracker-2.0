@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import type { Pool, PoolsResponse, SavedView, HeldPosition } from './types/pool';
 import type { FetchProgress } from './utils/historicalData';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -318,6 +319,7 @@ function App() {
           <Route path="/*" element={<AppContent />} />
         </Routes>
       </AuthProvider>
+      <Analytics />
     </BrowserRouter>
   );
 }
