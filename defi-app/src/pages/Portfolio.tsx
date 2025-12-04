@@ -4,6 +4,7 @@ import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../ut
 import { getCachedData, getPoolMetrics } from '../utils/historicalData';
 import { Sparkline } from '../components/Sparkline';
 import { MetricInfo } from '../components/MetricInfo';
+import { PoolSearchInput } from '../components/PoolSearchInput';
 
 interface PortfolioProps {
   positions: HeldPosition[];
@@ -27,7 +28,7 @@ interface PositionAlert {
 }
 
 export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioProps) {
-  const [newPoolId, setNewPoolId] = useState('');
+  const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
   const [newAmount, setNewAmount] = useState('');
   const [newEntryDate, setNewEntryDate] = useState('');
   const [newNotes, setNewNotes] = useState('');
@@ -36,6 +37,9 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [editAmount, setEditAmount] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Get list of pool IDs already in portfolio
+  const heldPoolIds = useMemo(() => positions.map(p => p.poolId), [positions]);
 
   // Get positions with pool info, metrics, and alerts
   const positionsWithPools = useMemo<PositionWithPool[]>(() => {
@@ -184,11 +188,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   }, [positionsWithPools, totalValue]);
 
   const handleAdd = async () => {
-    const trimmedId = newPoolId.trim();
     const amount = parseFloat(newAmount);
 
-    if (!trimmedId) {
-      setError('Pool ID is required');
+    if (!selectedPool) {
+      setError('Please select a pool');
       return;
     }
     if (isNaN(amount) || amount <= 0) {
@@ -196,21 +199,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       return;
     }
 
-    const pool = pools.find(p => p.pool === trimmedId);
-    if (!pool) {
-      setError('Pool ID not found in current data');
-      return;
-    }
-
-    if (positions.some(p => p.poolId === trimmedId)) {
-      setError('Pool already in your portfolio');
-      return;
-    }
-
     setSaving(true);
     try {
       await addPositionToDb({
-        poolId: trimmedId,
+        poolId: selectedPool.pool,
         amountUsd: amount,
         entryDate: newEntryDate || undefined,
         notes: newNotes || undefined,
@@ -220,7 +212,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         await onRefreshPositions();
       }
 
-      setNewPoolId('');
+      setSelectedPool(null);
       setNewAmount('');
       setNewEntryDate('');
       setNewNotes('');
@@ -462,135 +454,154 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                           </div>
                         )}
 
-                        {/* APY Sparkline - larger and more prominent */}
-                        {apyHistory.length >= 2 && (
-                          <div className="mt-3 bg-slate-900/50 rounded p-2">
-                            <div className="text-slate-500 text-xs mb-1">30-Day APY Trend</div>
-                            <Sparkline data={apyHistory} width={280} height={40} />
+                        {/* Grouped Metrics */}
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                          {/* POSITION Group */}
+                          <div className="bg-slate-900/30 rounded-lg p-3 space-y-2">
+                            <div className="text-slate-500 text-xs font-medium uppercase tracking-wide mb-2">Position</div>
+                            <div className="group">
+                              <div className="text-slate-400 text-xs flex items-center">
+                                Amount
+                                <MetricInfo metric="amount" value={position.amountUsd} />
+                              </div>
+                              <div className="text-white font-semibold text-lg">{formatCurrency(position.amountUsd)}</div>
+                            </div>
+                            <div className="group">
+                              <div className="text-slate-400 text-xs flex items-center">
+                                Allocation
+                                <MetricInfo metric="allocation" value={allocation} />
+                              </div>
+                              <div className="text-white font-medium">{allocation.toFixed(1)}%</div>
+                            </div>
+                            <div className="group">
+                              <div className="text-slate-400 text-xs flex items-center">
+                                Annual
+                                <MetricInfo metric="annualEarnings" value={projectedEarning} />
+                              </div>
+                              <div className="text-emerald-400 font-medium">{formatCurrency(projectedEarning)}</div>
+                            </div>
                           </div>
-                        )}
 
-                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4 text-sm">
-                          <div className="group">
-                            <div className="text-slate-400 text-xs flex items-center">
-                              Amount
-                              <MetricInfo metric="amount" value={position.amountUsd} />
-                            </div>
-                            <div className="text-white font-medium">{formatCurrency(position.amountUsd)}</div>
-                          </div>
-                          <div className="group">
-                            <div className="text-slate-400 text-xs flex items-center">
-                              APY
-                              <MetricInfo metric="apy" value={pool.apy} pool={pool} metrics={metrics ?? undefined} />
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-green-400 font-medium">{pool.apy.toFixed(2)}%</span>
-                              {yesterdayApy !== null && (
-                                <span className={`text-xs ${pool.apy >= yesterdayApy ? 'text-green-400' : 'text-red-400'}`}>
-                                  {pool.apy >= yesterdayApy ? '↑' : '↓'}
-                                  {Math.abs(pool.apy - yesterdayApy).toFixed(2)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="group">
-                            <div className="text-slate-400 text-xs flex items-center">
-                              Base APY
-                              <MetricInfo metric="apyBase" value={pool.apyBase ?? 0} pool={pool} />
-                            </div>
-                            <div className="text-slate-300 font-medium">{(pool.apyBase ?? 0).toFixed(2)}%</div>
-                          </div>
-                          <div className="group">
-                            <div className="text-slate-400 text-xs flex items-center">
-                              Reward APY
-                              <MetricInfo metric="apyReward" value={pool.apyReward ?? 0} pool={pool} />
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-purple-400 font-medium">{(pool.apyReward ?? 0).toFixed(2)}%</span>
-                              {pool.apy > 0 && (
-                                <span className="text-slate-500 text-xs">
-                                  ({((pool.apyReward ?? 0) / pool.apy * 100).toFixed(0)}%)
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="group">
-                            <div className="text-slate-400 text-xs flex items-center">
-                              Avg30
-                              <MetricInfo metric="avg30" value={pool.apyMean30d} pool={pool} />
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {pool.apyMean30d !== null ? (
-                                <>
-                                  <span className="text-cyan-400 font-medium">{pool.apyMean30d.toFixed(2)}%</span>
-                                  <span className={pool.apy > pool.apyMean30d ? 'text-green-400' : 'text-red-400'}>
-                                    {pool.apy > pool.apyMean30d ? '↑' : '↓'}
+                          {/* APY Group */}
+                          <div className="bg-slate-900/30 rounded-lg p-3 space-y-2">
+                            <div className="text-slate-500 text-xs font-medium uppercase tracking-wide mb-2">APY</div>
+                            <div className="group">
+                              <div className="text-slate-400 text-xs flex items-center">
+                                Current
+                                <MetricInfo metric="apy" value={pool.apy} pool={pool} metrics={metrics ?? undefined} />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-green-400 font-semibold text-lg">{pool.apy.toFixed(2)}%</span>
+                                {yesterdayApy !== null && (
+                                  <span className={`text-xs ${pool.apy >= yesterdayApy ? 'text-green-400' : 'text-red-400'}`}>
+                                    {pool.apy >= yesterdayApy ? '↑' : '↓'}{Math.abs(pool.apy - yesterdayApy).toFixed(2)}
                                   </span>
-                                </>
-                              ) : (
-                                <span className="text-slate-500">-</span>
-                              )}
+                                )}
+                              </div>
                             </div>
-                          </div>
-                          <div className="group">
-                            <div className="text-slate-400 text-xs flex items-center">
-                              Avg90
-                              <MetricInfo metric="avg90" value={metrics?.base90} pool={pool} metrics={metrics ?? undefined} />
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {metrics?.base90 !== undefined ? (
-                                <>
-                                  <span className="text-cyan-400 font-medium">{metrics.base90.toFixed(2)}%</span>
-                                  {(pool.apyBase ?? 0) !== 0 && (
-                                    <span className={(pool.apyBase ?? 0) > metrics.base90 ? 'text-green-400' : 'text-red-400'}>
-                                      {(pool.apyBase ?? 0) > metrics.base90 ? '↑' : '↓'}
+                            <div className="flex gap-4">
+                              <div className="group flex-1">
+                                <div className="text-slate-400 text-xs flex items-center">
+                                  Base
+                                  <MetricInfo metric="apyBase" value={pool.apyBase ?? 0} pool={pool} />
+                                </div>
+                                <div className="text-slate-300 font-medium">{(pool.apyBase ?? 0).toFixed(2)}%</div>
+                              </div>
+                              <div className="group flex-1">
+                                <div className="text-slate-400 text-xs flex items-center">
+                                  Reward
+                                  <MetricInfo metric="apyReward" value={pool.apyReward ?? 0} pool={pool} />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-purple-400 font-medium">{(pool.apyReward ?? 0).toFixed(2)}%</span>
+                                  {pool.apy > 0 && (
+                                    <span className="text-slate-500 text-xs">
+                                      ({((pool.apyReward ?? 0) / pool.apy * 100).toFixed(0)}%)
                                     </span>
                                   )}
-                                </>
-                              ) : (
-                                <span className="text-slate-500">-</span>
-                              )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex gap-4">
+                              <div className="group flex-1">
+                                <div className="text-slate-400 text-xs flex items-center">
+                                  Avg30
+                                  <MetricInfo metric="avg30" value={pool.apyMean30d} pool={pool} />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {pool.apyMean30d !== null ? (
+                                    <>
+                                      <span className="text-cyan-400 font-medium">{pool.apyMean30d.toFixed(2)}%</span>
+                                      <span className={pool.apy > pool.apyMean30d ? 'text-green-400' : 'text-red-400'}>
+                                        {pool.apy > pool.apyMean30d ? '↑' : '↓'}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-slate-500">-</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="group flex-1">
+                                <div className="text-slate-400 text-xs flex items-center">
+                                  Avg90
+                                  <MetricInfo metric="avg90" value={metrics?.base90} pool={pool} metrics={metrics ?? undefined} />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {metrics?.base90 !== undefined ? (
+                                    <>
+                                      <span className="text-cyan-400 font-medium">{metrics.base90.toFixed(2)}%</span>
+                                      {(pool.apyBase ?? 0) !== 0 && (
+                                        <span className={(pool.apyBase ?? 0) > metrics.base90 ? 'text-green-400' : 'text-red-400'}>
+                                          {(pool.apyBase ?? 0) > metrics.base90 ? '↑' : '↓'}
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="text-slate-500">-</span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           </div>
-                          <div className="group">
-                            <div className="text-slate-400 text-xs flex items-center">
-                              TVL
-                              <MetricInfo metric="tvl" value={pool.tvlUsd} pool={pool} metrics={metrics ?? undefined} />
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-white font-medium">
-                                {pool.tvlUsd >= 1_000_000
-                                  ? `$${(pool.tvlUsd / 1_000_000).toFixed(1)}M`
-                                  : `$${(pool.tvlUsd / 1_000).toFixed(0)}K`}
-                              </span>
-                              {metrics && (
-                                <span className={`text-xs ${metrics.tvlChange30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                  {metrics.tvlChange30d >= 0 ? '+' : ''}{metrics.tvlChange30d.toFixed(0)}%
+
+                          {/* POOL HEALTH Group */}
+                          <div className="bg-slate-900/30 rounded-lg p-3 space-y-2">
+                            <div className="text-slate-500 text-xs font-medium uppercase tracking-wide mb-2">Pool Health</div>
+                            <div className="group">
+                              <div className="text-slate-400 text-xs flex items-center">
+                                TVL
+                                <MetricInfo metric="tvl" value={pool.tvlUsd} pool={pool} metrics={metrics ?? undefined} />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-white font-semibold text-lg">
+                                  {pool.tvlUsd >= 1_000_000
+                                    ? `$${(pool.tvlUsd / 1_000_000).toFixed(1)}M`
+                                    : `$${(pool.tvlUsd / 1_000).toFixed(0)}K`}
                                 </span>
-                              )}
+                                {metrics && (
+                                  <span className={`text-xs ${metrics.tvlChange30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {metrics.tvlChange30d >= 0 ? '+' : ''}{metrics.tvlChange30d.toFixed(0)}% 30d
+                                  </span>
+                                )}
+                              </div>
                             </div>
+                            {/* Sparkline in Pool Health */}
+                            {apyHistory.length >= 2 && (
+                              <div className="pt-2">
+                                <div className="text-slate-500 text-xs mb-1">30-Day APY</div>
+                                <Sparkline data={apyHistory} width={200} height={32} />
+                              </div>
+                            )}
                           </div>
-                          <div className="group">
-                            <div className="text-slate-400 text-xs flex items-center">
-                              Allocation
-                              <MetricInfo metric="allocation" value={allocation} />
-                            </div>
-                            <div className="text-white font-medium">{allocation.toFixed(1)}%</div>
-                          </div>
-                          <div className="group">
-                            <div className="text-slate-400 text-xs flex items-center">
-                              Annual
-                              <MetricInfo metric="annualEarnings" value={projectedEarning} />
-                            </div>
-                            <div className="text-emerald-400 font-medium">{formatCurrency(projectedEarning)}</div>
-                          </div>
-                          {position.notes && (
-                            <div className="col-span-2 sm:col-span-3 md:col-span-6">
-                              <div className="text-slate-400 text-xs">Notes</div>
-                              <div className="text-slate-300 text-xs">{position.notes}</div>
-                            </div>
-                          )}
                         </div>
+
+                        {/* Notes */}
+                        {position.notes && (
+                          <div className="mt-3 text-sm">
+                            <div className="text-slate-400 text-xs">Notes</div>
+                            <div className="text-slate-300 text-xs">{position.notes}</div>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -602,57 +613,67 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
           {/* Add Position Form */}
           <div className="bg-slate-800 rounded-lg p-4">
             <h3 className="text-md font-medium text-white mb-4">Add Position</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div className="sm:col-span-2 md:col-span-1">
-                <label className="block text-xs sm:text-sm text-slate-400 mb-1">Pool ID *</label>
-                <input
-                  type="text"
-                  value={newPoolId}
-                  onChange={(e) => { setNewPoolId(e.target.value); setError(''); }}
-                  placeholder="e.g., aa70268e-4b52..."
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-yellow-500"
-                />
-              </div>
+            <div className="space-y-4">
+              {/* Pool Search */}
               <div>
-                <label className="block text-xs sm:text-sm text-slate-400 mb-1">Amount (USD) *</label>
-                <input
-                  type="number"
-                  value={newAmount}
-                  onChange={(e) => setNewAmount(e.target.value)}
-                  placeholder="1000"
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                <label className="block text-xs sm:text-sm text-slate-400 mb-1">Find Pool *</label>
+                <PoolSearchInput
+                  pools={pools}
+                  onSelect={(pool) => { setSelectedPool(pool); setError(''); }}
+                  selectedPool={selectedPool}
+                  onClear={() => setSelectedPool(null)}
+                  excludePoolIds={heldPoolIds}
                 />
               </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-slate-400 mb-1">Entry Date</label>
-                <input
-                  type="date"
-                  value={newEntryDate}
-                  onChange={(e) => setNewEntryDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-slate-400 mb-1">Notes</label>
-                <input
-                  type="text"
-                  value={newNotes}
-                  onChange={(e) => setNewNotes(e.target.value)}
-                  placeholder="Add notes..."
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
-                />
-              </div>
+
+              {/* Amount and other fields - show when pool is selected */}
+              {selectedPool && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                  <div>
+                    <label className="block text-xs sm:text-sm text-slate-400 mb-1">Amount (USD) *</label>
+                    <input
+                      type="number"
+                      value={newAmount}
+                      onChange={(e) => setNewAmount(e.target.value)}
+                      placeholder="1000"
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm text-slate-400 mb-1">Entry Date</label>
+                    <input
+                      type="date"
+                      value={newEntryDate}
+                      onChange={(e) => setNewEntryDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm text-slate-400 mb-1">Notes</label>
+                    <input
+                      type="text"
+                      value={newNotes}
+                      onChange={(e) => setNewNotes(e.target.value)}
+                      placeholder="Add notes..."
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             {error && (
               <p className="text-sm text-red-400 mt-2">{error}</p>
             )}
-            <button
-              onClick={handleAdd}
-              disabled={saving}
-              className="mt-4 w-full sm:w-auto px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-500 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Adding...' : 'Add Position'}
-            </button>
+            {selectedPool && (
+              <button
+                onClick={handleAdd}
+                disabled={saving}
+                className="mt-4 w-full sm:w-auto px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-500 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Adding...' : 'Add Position'}
+              </button>
+            )}
           </div>
         </div>
 
