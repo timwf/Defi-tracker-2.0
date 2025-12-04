@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 
 const STORAGE_KEY = 'defi-tracker-positions';
 
-// Legacy localStorage functions (for migration)
+// localStorage functions
 export function getLocalPositions(): HeldPosition[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -22,8 +22,58 @@ export function clearLocalPositions(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-// Supabase functions
+function saveLocalPositions(positions: HeldPosition[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
+}
+
+function addLocalPosition(params: {
+  poolId: string;
+  amountUsd: number;
+  entryDate?: string;
+  notes?: string;
+}): HeldPosition {
+  const positions = getLocalPositions();
+  const newPosition: HeldPosition = {
+    poolId: params.poolId,
+    amountUsd: params.amountUsd,
+    addedAt: Date.now(),
+    entryDate: params.entryDate,
+    notes: params.notes,
+  };
+  positions.unshift(newPosition);
+  saveLocalPositions(positions);
+  return newPosition;
+}
+
+function removeLocalPosition(poolId: string): boolean {
+  const positions = getLocalPositions();
+  const filtered = positions.filter(p => p.poolId !== poolId);
+  if (filtered.length === positions.length) return false;
+  saveLocalPositions(filtered);
+  return true;
+}
+
+function updateLocalPosition(
+  poolId: string,
+  updates: Partial<Omit<HeldPosition, 'poolId' | 'addedAt'>>
+): boolean {
+  const positions = getLocalPositions();
+  const index = positions.findIndex(p => p.poolId === poolId);
+  if (index === -1) return false;
+  positions[index] = { ...positions[index], ...updates };
+  saveLocalPositions(positions);
+  return true;
+}
+
+// Supabase functions (with localStorage fallback for unauthenticated users)
 export async function fetchPositions(): Promise<HeldPosition[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // If not logged in, use localStorage
+  if (!user) {
+    return getLocalPositions();
+  }
+
   const { data, error } = await supabase
     .from('positions')
     .select('*')
@@ -50,7 +100,11 @@ export async function addPositionToDb(params: {
   notes?: string;
 }): Promise<HeldPosition | null> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+
+  // If not logged in, use localStorage
+  if (!user) {
+    return addLocalPosition(params);
+  }
 
   const { data, error } = await supabase
     .from('positions')
@@ -79,6 +133,13 @@ export async function addPositionToDb(params: {
 }
 
 export async function removePositionFromDb(poolId: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // If not logged in, use localStorage
+  if (!user) {
+    return removeLocalPosition(poolId);
+  }
+
   const { error } = await supabase
     .from('positions')
     .delete()
@@ -96,6 +157,13 @@ export async function updatePositionInDb(
   poolId: string,
   updates: Partial<Omit<HeldPosition, 'poolId' | 'addedAt'>>
 ): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // If not logged in, use localStorage
+  if (!user) {
+    return updateLocalPosition(poolId, updates);
+  }
+
   const updateData: Record<string, unknown> = {};
   if (updates.amountUsd !== undefined) updateData.amount_usd = updates.amountUsd;
   if (updates.entryDate !== undefined) updateData.entry_date = updates.entryDate || null;

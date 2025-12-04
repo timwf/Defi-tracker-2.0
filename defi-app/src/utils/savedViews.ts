@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 
 const STORAGE_KEY = 'defi-tracker-views';
 
-// Legacy localStorage functions (for migration)
+// localStorage functions
 export function getLocalViews(): SavedView[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -18,8 +18,39 @@ export function clearLocalViews(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-// Supabase functions
+function saveLocalViews(views: SavedView[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(views));
+}
+
+function saveLocalView(view: SavedView): boolean {
+  const views = getLocalViews();
+  const existingIndex = views.findIndex(v => v.name === view.name);
+  if (existingIndex >= 0) {
+    views[existingIndex] = view;
+  } else {
+    views.unshift(view);
+  }
+  saveLocalViews(views);
+  return true;
+}
+
+function deleteLocalView(name: string): boolean {
+  const views = getLocalViews();
+  const filtered = views.filter(v => v.name !== name);
+  if (filtered.length === views.length) return false;
+  saveLocalViews(filtered);
+  return true;
+}
+
+// Supabase functions (with localStorage fallback for unauthenticated users)
 export async function fetchViews(): Promise<SavedView[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // If not logged in, use localStorage
+  if (!user) {
+    return getLocalViews();
+  }
+
   const { data, error } = await supabase
     .from('saved_views')
     .select('*')
@@ -41,7 +72,11 @@ export async function fetchViews(): Promise<SavedView[]> {
 
 export async function saveViewToDb(view: SavedView): Promise<boolean> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
+
+  // If not logged in, use localStorage
+  if (!user) {
+    return saveLocalView(view);
+  }
 
   const { error } = await supabase
     .from('saved_views')
@@ -65,6 +100,13 @@ export async function saveViewToDb(view: SavedView): Promise<boolean> {
 }
 
 export async function deleteViewFromDb(name: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // If not logged in, use localStorage
+  if (!user) {
+    return deleteLocalView(name);
+  }
+
   const { error } = await supabase
     .from('saved_views')
     .delete()

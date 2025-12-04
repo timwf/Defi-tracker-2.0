@@ -4,6 +4,7 @@ import type { Pool, PoolsResponse, Filters, SortField, SortDirection, SavedView,
 import type { FetchProgress } from './utils/historicalData';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NavHeader } from './components/NavHeader';
+import { AddPositionModal } from './components/AddPositionModal';
 import { PoolsPage } from './pages/Pools';
 import { Portfolio } from './pages/Portfolio';
 import { Login } from './pages/Login';
@@ -52,6 +53,10 @@ function AppContent() {
   // Held positions state
   const [heldPositions, setHeldPositions] = useState<HeldPosition[]>([]);
 
+  // Add position modal state
+  const [addPositionModalOpen, setAddPositionModalOpen] = useState(false);
+  const [pendingPoolId, setPendingPoolId] = useState<string | null>(null);
+
   // Migration notification
   const [migrationMessage, setMigrationMessage] = useState<string | null>(null);
 
@@ -59,15 +64,24 @@ function AppContent() {
     fetchPools();
   }, []);
 
-  // Load user data when user changes
+  // Load user data when user changes (or load from localStorage if not logged in)
   useEffect(() => {
     if (user) {
       loadUserData();
     } else {
-      setSavedViews([]);
-      setHeldPositions([]);
+      // Load from localStorage for non-authenticated users
+      loadLocalData();
     }
   }, [user]);
+
+  async function loadLocalData() {
+    const [positions, views] = await Promise.all([
+      fetchPositions(),
+      fetchViews(),
+    ]);
+    setHeldPositions(positions);
+    setSavedViews(views);
+  }
 
   async function loadUserData() {
     // Check for local data to migrate
@@ -139,6 +153,44 @@ function AppContent() {
   };
 
   const handleToggleHeld = useCallback(async (poolId: string, isCurrentlyHeld: boolean) => {
+    if (isCurrentlyHeld) {
+      // Removing - do it directly
+      // Save scroll position before state changes
+      const scrollY = window.scrollY;
+
+      // Temporarily lock scroll position using CSS
+      const html = document.documentElement;
+      html.style.scrollBehavior = 'auto';
+      html.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+
+      await removePositionFromDb(poolId);
+      const positions = await fetchPositions();
+      setHeldPositions(positions);
+
+      // Restore scroll after React re-renders
+      requestAnimationFrame(() => {
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        html.style.overflow = '';
+        html.style.scrollBehavior = '';
+        window.scrollTo(0, scrollY);
+      });
+    } else {
+      // Adding - show modal to get amount and entry date
+      setPendingPoolId(poolId);
+      setAddPositionModalOpen(true);
+    }
+  }, []);
+
+  const handleAddPosition = useCallback(async (amountUsd: number, entryDate: string) => {
+    if (!pendingPoolId) return;
+
     // Save scroll position before state changes
     const scrollY = window.scrollY;
 
@@ -151,13 +203,10 @@ function AppContent() {
     document.body.style.top = `-${scrollY}px`;
     document.body.style.width = '100%';
 
-    if (isCurrentlyHeld) {
-      await removePositionFromDb(poolId);
-    } else {
-      await addPositionToDb({ poolId, amountUsd: 0 });
-    }
+    await addPositionToDb({ poolId: pendingPoolId, amountUsd, entryDate });
     const positions = await fetchPositions();
     setHeldPositions(positions);
+    setPendingPoolId(null);
 
     // Restore scroll after React re-renders
     requestAnimationFrame(() => {
@@ -169,7 +218,7 @@ function AppContent() {
       html.style.scrollBehavior = '';
       window.scrollTo(0, scrollY);
     });
-  }, []);
+  }, [pendingPoolId]);
 
   const handlePositionsChange = useCallback(async (positions: HeldPosition[]) => {
     // This is called from Portfolio page with full positions array
@@ -246,6 +295,17 @@ function AppContent() {
           />
         </Routes>
       </div>
+
+      {/* Add Position Modal */}
+      <AddPositionModal
+        isOpen={addPositionModalOpen}
+        onClose={() => {
+          setAddPositionModalOpen(false);
+          setPendingPoolId(null);
+        }}
+        onAdd={handleAddPosition}
+        pool={pendingPoolId ? pools.find(p => p.pool === pendingPoolId) || null : null}
+      />
     </div>
   );
 }
