@@ -20,6 +20,8 @@ interface PoolsPageProps {
   onSaveView: (name: string) => void;
   onLoadView: (view: SavedView) => void;
   onDeleteView: (name: string) => void;
+  onClearFilters: () => void;
+  hasActiveFilters: boolean;
   heldPositions: HeldPosition[];
   onToggleHeld: (poolId: string, isHeld: boolean) => void;
   isFetchingHistorical: boolean;
@@ -45,6 +47,8 @@ export function PoolsPage({
   onSaveView,
   onLoadView,
   onDeleteView,
+  onClearFilters,
+  hasActiveFilters,
   heldPositions,
   onToggleHeld,
   isFetchingHistorical,
@@ -205,6 +209,8 @@ export function PoolsPage({
         onLoadView={onLoadView}
         onSaveView={onSaveView}
         onDeleteView={onDeleteView}
+        onClearFilters={onClearFilters}
+        hasActiveFilters={hasActiveFilters}
       />
 
       <FiltersPanel

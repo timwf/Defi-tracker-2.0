@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import type { Pool, PoolsResponse, Filters, SortField, SortDirection, SavedView, HeldPosition } from './types/pool';
+import type { Pool, PoolsResponse, SavedView, HeldPosition } from './types/pool';
 import type { FetchProgress } from './utils/historicalData';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NavHeader } from './components/NavHeader';
@@ -8,6 +8,7 @@ import { AddPositionModal } from './components/AddPositionModal';
 import { PoolsPage } from './pages/Pools';
 import { Portfolio } from './pages/Portfolio';
 import { Login } from './pages/Login';
+import { useUrlFilters } from './hooks/useUrlFilters';
 import {
   fetchPositions,
   addPositionToDb,
@@ -23,26 +24,26 @@ import {
   getLocalViews
 } from './utils/savedViews';
 
-const DEFAULT_FILTERS: Filters = {
-  chains: [],
-  projects: [],
-  stablecoinOnly: false,
-  tvlMin: 0,
-  apyMin: 0,
-  apyMax: 1000,
-  search: '',
-};
-
 function AppContent() {
   const { user } = useAuth();
   const [pools, setPools] = useState<Pool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [sortField, setSortField] = useState<SortField>('tvlUsd');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+
+  // URL-based filter and sort state
+  const {
+    filters,
+    setFilters,
+    sortField,
+    setSortField,
+    sortDirection,
+    setSortDirection,
+    hasActiveFilters,
+    clearFilters,
+    applyView,
+  } = useUrlFilters();
 
   // Historical data state
   const [isFetchingHistorical, setIsFetchingHistorical] = useState(false);
@@ -141,9 +142,7 @@ function AppContent() {
   };
 
   const handleLoadView = (view: SavedView) => {
-    setFilters(view.filters);
-    setSortField(view.sortField);
-    setSortDirection(view.sortDirection);
+    applyView(view.filters, view.sortField, view.sortDirection);
   };
 
   const handleDeleteView = async (name: string) => {
@@ -269,6 +268,8 @@ function AppContent() {
                 onSaveView={handleSaveView}
                 onLoadView={handleLoadView}
                 onDeleteView={handleDeleteView}
+                onClearFilters={clearFilters}
+                hasActiveFilters={hasActiveFilters}
                 heldPositions={heldPositions}
                 onToggleHeld={handleToggleHeld}
                 isFetchingHistorical={isFetchingHistorical}

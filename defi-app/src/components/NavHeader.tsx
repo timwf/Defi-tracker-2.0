@@ -1,5 +1,6 @@
-import { NavLink, Link } from 'react-router-dom';
+import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useEffect } from 'react';
 
 interface NavHeaderProps {
   poolCount: number;
@@ -19,8 +20,27 @@ function formatTimeAgo(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString();
 }
 
+const POOLS_SEARCH_KEY = 'defi-tracker-pools-search';
+
 export function NavHeader({ poolCount, lastUpdated, onRefresh, loading, positionCount }: NavHeaderProps) {
   const { user, signOut } = useAuth();
+  const location = useLocation();
+
+  // Remember the last pools search params in sessionStorage
+  useEffect(() => {
+    if (location.pathname === '/pools') {
+      sessionStorage.setItem(POOLS_SEARCH_KEY, location.search);
+    }
+  }, [location]);
+
+  // Build the pools link - preserve search params when navigating back
+  const getPoolsLink = () => {
+    if (location.pathname === '/pools') {
+      return `/pools${location.search}`;
+    }
+    const savedSearch = sessionStorage.getItem(POOLS_SEARCH_KEY) || '';
+    return `/pools${savedSearch}`;
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-slate-900 -mx-4 px-4 py-3 mb-4 sm:mb-6 sm:static sm:mx-0 sm:px-0 sm:py-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -49,7 +69,7 @@ export function NavHeader({ poolCount, lastUpdated, onRefresh, loading, position
       <div className="flex items-center gap-2 sm:gap-4">
         <nav className="flex gap-2">
           <NavLink
-            to="/pools"
+            to={getPoolsLink()}
             className={({ isActive }) =>
               `px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
                 isActive
