@@ -68,6 +68,7 @@ export function PoolsPage({
 
   const allChains = useMemo(() => getUniqueChains(pools), [pools]);
   const allProjects = useMemo(() => getUniqueProjects(pools), [pools]);
+  const allSymbols = useMemo(() => pools.map(p => p.symbol), [pools]);
 
   const availableChains = useMemo(
     () => getAvailableChainsForProjects(pools, filters.projects),
@@ -219,6 +220,7 @@ export function PoolsPage({
         availableProjects={availableProjects}
         allChains={allChains}
         allProjects={allProjects}
+        allSymbols={allSymbols}
       />
 
       <HistoricalFetch

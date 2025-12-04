@@ -12,13 +12,22 @@ export function filterPools(pools: Pool[], filters: Filters): Pool[] {
       return false;
     }
 
+    // Token filter - check if any selected token appears in the symbol
+    if (filters.tokens.length > 0) {
+      const symbolUpper = pool.symbol.toUpperCase();
+      const hasMatchingToken = filters.tokens.some(token => symbolUpper.includes(token.toUpperCase()));
+      if (!hasMatchingToken) {
+        return false;
+      }
+    }
+
     // Stablecoin filter
     if (filters.stablecoinOnly && !pool.stablecoin) {
       return false;
     }
 
-    // TVL minimum
-    if (pool.tvlUsd < filters.tvlMin) {
+    // TVL range
+    if (pool.tvlUsd < filters.tvlMin || pool.tvlUsd > filters.tvlMax) {
       return false;
     }
 

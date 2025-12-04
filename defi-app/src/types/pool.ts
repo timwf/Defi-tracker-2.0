@@ -41,8 +41,10 @@ export interface PoolsResponse {
 export interface Filters {
   chains: string[];
   projects: string[];
+  tokens: string[];
   stablecoinOnly: boolean;
   tvlMin: number;
+  tvlMax: number;
   apyMin: number;
   apyMax: number;
   search: string;

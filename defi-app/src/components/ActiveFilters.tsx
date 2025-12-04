@@ -1,9 +1,17 @@
 import type { Filters } from '../types/pool';
 
+const formatTvl = (value: number) => {
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(0)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
+  return `$${value}`;
+};
+
 interface ActiveFiltersProps {
   filters: Filters;
   onRemoveChain: (chain: string) => void;
   onRemoveProject: (project: string) => void;
+  onRemoveToken: (token: string) => void;
   onClearTvl: () => void;
   onClearApy: () => void;
   onClearStablecoin: () => void;
@@ -15,6 +23,7 @@ export function ActiveFilters({
   filters,
   onRemoveChain,
   onRemoveProject,
+  onRemoveToken,
   onClearTvl,
   onClearApy,
   onClearStablecoin,
@@ -23,12 +32,13 @@ export function ActiveFilters({
 }: ActiveFiltersProps) {
   const hasChains = filters.chains.length > 0;
   const hasProjects = filters.projects.length > 0;
-  const hasTvl = filters.tvlMin > 0;
+  const hasTokens = filters.tokens.length > 0;
+  const hasTvl = filters.tvlMin > 0 || filters.tvlMax < 10_000_000_000;
   const hasApy = filters.apyMin > 0 || filters.apyMax < 1000;
   const hasStablecoin = filters.stablecoinOnly;
   const hasSearch = filters.search.length > 0;
 
-  const hasAnyFilter = hasChains || hasProjects || hasTvl || hasApy || hasStablecoin || hasSearch;
+  const hasAnyFilter = hasChains || hasProjects || hasTokens || hasTvl || hasApy || hasStablecoin || hasSearch;
 
   if (!hasAnyFilter) {
     return null;
@@ -37,6 +47,7 @@ export function ActiveFilters({
   const totalFilters =
     filters.chains.length +
     filters.projects.length +
+    filters.tokens.length +
     (hasTvl ? 1 : 0) +
     (hasApy ? 1 : 0) +
     (hasStablecoin ? 1 : 0) +
@@ -75,10 +86,20 @@ export function ActiveFilters({
         />
       ))}
 
+      {/* Tokens */}
+      {filters.tokens.map((token) => (
+        <Pill
+          key={token}
+          label={token}
+          colorClass="purple"
+          onRemove={() => onRemoveToken(token)}
+        />
+      ))}
+
       {/* TVL */}
       {hasTvl && (
         <Pill
-          label={`TVL ≥ $${(filters.tvlMin / 1_000_000).toFixed(1)}M`}
+          label={`TVL: ${formatTvl(filters.tvlMin)} - ${formatTvl(filters.tvlMax)}`}
           colorClass="amber"
           onRemove={onClearTvl}
         />

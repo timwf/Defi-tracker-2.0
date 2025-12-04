@@ -5,8 +5,10 @@ import type { Filters, SortField, SortDirection } from '../types/pool';
 const DEFAULT_FILTERS: Filters = {
   chains: [],
   projects: [],
+  tokens: [],
   stablecoinOnly: false,
   tvlMin: 0,
+  tvlMax: 10_000_000_000, // 10B max
   apyMin: 0,
   apyMax: 1000,
   search: '',
@@ -26,8 +28,10 @@ function parseFiltersFromUrl(searchParams: URLSearchParams): Filters {
   return {
     chains: searchParams.get('chains')?.split(',').filter(Boolean) || [],
     projects: searchParams.get('projects')?.split(',').filter(Boolean) || [],
+    tokens: searchParams.get('tokens')?.split(',').filter(Boolean) || [],
     stablecoinOnly: searchParams.get('stable') === 'true',
     tvlMin: parseFloat(searchParams.get('tvlMin') || '0') || 0,
+    tvlMax: parseFloat(searchParams.get('tvlMax') || '10000000000') || 10_000_000_000,
     apyMin: parseFloat(searchParams.get('apyMin') || '0') || 0,
     apyMax: parseFloat(searchParams.get('apyMax') || '1000') || 1000,
     search: searchParams.get('search') || '',
@@ -48,17 +52,23 @@ function filtersToUrlParams(filters: Filters, sortField: SortField, sortDirectio
   const params = new URLSearchParams();
 
   // Only add non-default values to keep URL clean
-  if (filters.chains.length > 0) {
+  if (filters.chains?.length > 0) {
     params.set('chains', filters.chains.join(','));
   }
-  if (filters.projects.length > 0) {
+  if (filters.projects?.length > 0) {
     params.set('projects', filters.projects.join(','));
+  }
+  if (filters.tokens?.length > 0) {
+    params.set('tokens', filters.tokens.join(','));
   }
   if (filters.stablecoinOnly) {
     params.set('stable', 'true');
   }
   if (filters.tvlMin > 0) {
     params.set('tvlMin', filters.tvlMin.toString());
+  }
+  if (filters.tvlMax < 10_000_000_000) {
+    params.set('tvlMax', filters.tvlMax.toString());
   }
   if (filters.apyMin > 0) {
     params.set('apyMin', filters.apyMin.toString());
@@ -80,16 +90,26 @@ function filtersToUrlParams(filters: Filters, sortField: SortField, sortDirectio
 }
 
 function areFiltersEqual(a: Filters, b: Filters): boolean {
+  const aChains = a.chains || [];
+  const bChains = b.chains || [];
+  const aProjects = a.projects || [];
+  const bProjects = b.projects || [];
+  const aTokens = a.tokens || [];
+  const bTokens = b.tokens || [];
+
   return (
     a.stablecoinOnly === b.stablecoinOnly &&
     a.tvlMin === b.tvlMin &&
+    a.tvlMax === b.tvlMax &&
     a.apyMin === b.apyMin &&
     a.apyMax === b.apyMax &&
     a.search === b.search &&
-    a.chains.length === b.chains.length &&
-    a.projects.length === b.projects.length &&
-    a.chains.every((c, i) => c === b.chains[i]) &&
-    a.projects.every((p, i) => p === b.projects[i])
+    aChains.length === bChains.length &&
+    aProjects.length === bProjects.length &&
+    aTokens.length === bTokens.length &&
+    aChains.every((c, i) => c === bChains[i]) &&
+    aProjects.every((p, i) => p === bProjects[i]) &&
+    aTokens.every((t, i) => t === bTokens[i])
   );
 }
 
