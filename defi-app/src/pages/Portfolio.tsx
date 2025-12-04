@@ -143,7 +143,17 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const weightedApyChange = yesterdayWeightedApy !== null ? weightedApy - yesterdayWeightedApy : null;
 
   const projectedAnnualEarnings = totalValue * (weightedApy / 100);
+  const projectedMonthlyEarnings = projectedAnnualEarnings / 12;
   const projectedDailyEarnings = projectedAnnualEarnings / 365;
+
+  // Organic APY - weighted by base yield only (excludes reward tokens)
+  const organicApy = useMemo(() => {
+    if (totalValue === 0) return 0;
+    return positionsWithPools.reduce((sum, { position, pool }) => {
+      const baseApy = pool.apyBase || 0;
+      return sum + (baseApy * position.amountUsd / totalValue);
+    }, 0);
+  }, [positionsWithPools, totalValue]);
 
   // Risk breakdown
   const riskBreakdown = useMemo(() => {
@@ -273,7 +283,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   return (
     <div className="space-y-6">
       {/* Summary Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
         <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
           <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
             Total Value
@@ -297,10 +307,24 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         </div>
         <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
           <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
+            Organic APY
+            <MetricInfo metric="organicApy" value={organicApy} />
+          </div>
+          <div className="text-lg md:text-2xl font-bold text-blue-400">{organicApy.toFixed(2)}%</div>
+        </div>
+        <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
+          <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
             Annual
             <MetricInfo metric="annualEarnings" value={projectedAnnualEarnings} />
           </div>
           <div className="text-lg md:text-2xl font-bold text-emerald-400">{formatCurrency(projectedAnnualEarnings)}</div>
+        </div>
+        <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
+          <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
+            Monthly
+            <MetricInfo metric="monthlyEarnings" value={projectedMonthlyEarnings} />
+          </div>
+          <div className="text-lg md:text-2xl font-bold text-emerald-400">{formatCurrency(projectedMonthlyEarnings)}</div>
         </div>
         <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
           <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">

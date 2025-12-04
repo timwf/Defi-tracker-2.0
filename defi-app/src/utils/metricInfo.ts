@@ -6,7 +6,7 @@ export type MetricType =
   | 'avg30' | 'avg90' | 'days' | 'volatility' | 'organicPct' | 'tvlChange'
   | 'change1d' | 'change7d' | 'change30d' | 'sigma' | 'prediction' | 'stablecoin'
   // Portfolio metrics
-  | 'totalValue' | 'weightedApy' | 'annualEarnings' | 'dailyEarnings'
+  | 'totalValue' | 'weightedApy' | 'organicApy' | 'annualEarnings' | 'monthlyEarnings' | 'dailyEarnings'
   | 'amount' | 'allocation'
   // Risk metrics
   | 'stablecoinAllocation' | 'volatileAllocation' | 'organicYield';
@@ -259,12 +259,34 @@ export const metricDefinitions: Record<MetricType, MetricDefinition> = {
     },
   },
 
+  organicApy: {
+    title: 'Organic APY',
+    brief: 'Portfolio yield from base fees only, excluding token rewards.',
+    detailed: 'Organic APY shows what you\'d earn without temporary token incentives. This is the sustainable, long-term yield from:\n\n- Trading fees on DEXs\n- Interest from lending\n- Protocol revenue share\n\n**Why it matters:** Token rewards can end or decrease. A high organic APY means your yield is more sustainable. If your Organic APY is much lower than Weighted APY, your returns depend heavily on incentive tokens.',
+    interpretation: (value: number, _pool?: any, _metrics?: any, weightedApy?: number) => {
+      if (weightedApy && weightedApy > 0) {
+        const pct = (value / weightedApy) * 100;
+        return `${value.toFixed(2)}% organic (${pct.toFixed(0)}% of total yield is sustainable).`;
+      }
+      return `${value.toFixed(2)}% base yield from fees and interest.`;
+    },
+  },
+
   annualEarnings: {
     title: 'Projected Annual Earnings',
     brief: 'Estimated yearly earnings based on current APYs.',
     detailed: 'This projects your total earnings over a year if all current APYs remain constant.\n\n**Important:** This is a projection, not a guarantee. APYs change constantly, so actual earnings will differ. Use this for planning, not precise forecasting.',
     interpretation: (value: number) => {
       return `Projected ${formatCurrency(value)}/year (${formatCurrency(value/12)}/month) if current rates hold.`;
+    },
+  },
+
+  monthlyEarnings: {
+    title: 'Projected Monthly Earnings',
+    brief: 'Estimated monthly earnings based on current APYs.',
+    detailed: 'Your projected monthly yield across all positions. This is Annual Earnings divided by 12.\n\n**Note:** Monthly values are useful for budgeting and planning. Remember that actual yields fluctuate, so this is an estimate.',
+    interpretation: (value: number) => {
+      return `~${formatCurrency(value)}/month, or ~${formatCurrency(value / 4)}/week at current rates.`;
     },
   },
 
