@@ -3,6 +3,7 @@ import { formatTvl, formatApy, formatChange, formatSigma, formatPrediction } fro
 import { getPoolMetrics, getCacheAge, getCachedData } from '../utils/historicalData';
 import { Sparkline } from './Sparkline';
 import { MetricInfo } from './MetricInfo';
+import { PoolInfoCard } from './PoolInfoCard';
 
 function getRewardPct(pool: Pool): number | null {
   if (pool.apy === 0 || pool.apy === null) return null;
@@ -96,191 +97,20 @@ export function PoolTable({
   // Force re-render when historicalDataVersion changes
   void historicalDataVersion;
 
-  // Mobile card view component
+  // Mobile card view uses the shared PoolInfoCard component
   const MobilePoolCard = ({ pool }: { pool: Pool }) => {
-    const metrics: CalculatedMetrics | null = getPoolMetrics(pool.pool);
-    const cachedData = getCachedData(pool.pool);
-    const hasHistoricalData = cachedData !== null;
-    const dataPoints = cachedData?.data?.length || 0;
-    const hasEnoughData = dataPoints >= 7;
-    const fetchStatus = !hasHistoricalData ? 'none' : hasEnoughData ? 'good' : 'limited';
     const isFetching = fetchingPoolId === pool.pool;
     const isHeld = heldPoolIds.includes(pool.pool);
-    const apyHistory = getApyHistory(pool.pool);
-    const rewardPct = getRewardPct(pool);
 
     return (
-      <div className={`bg-slate-800 rounded-lg p-3 ${isHeld ? 'ring-1 ring-yellow-500/50' : ''}`}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="text-white font-medium truncate">{pool.symbol}</span>
-            </div>
-            <div className="text-xs text-slate-400 mt-0.5">
-              {pool.project} · {pool.chain}
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="flex items-center justify-end gap-2">
-              <span className="text-green-400 font-bold">{formatApy(pool.apy)}</span>
-              {apyHistory.length >= 2 && (
-                <Sparkline data={apyHistory} width={50} height={18} />
-              )}
-              <MetricInfo metric="apy" value={pool.apy} pool={pool} />
-            </div>
-            <div className="flex items-center justify-end gap-1 text-xs text-slate-400">
-              {formatTvl(pool.tvlUsd)}
-              <MetricInfo metric="tvl" value={pool.tvlUsd} pool={pool} />
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
-          <div>
-            <div className="flex items-center gap-1 text-slate-500">Base <MetricInfo metric="apyBase" value={pool.apyBase} pool={pool} /></div>
-            <div className="text-slate-300">{formatApy(pool.apyBase)}</div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1 text-slate-500">Reward <MetricInfo metric="apyReward" value={pool.apyReward} pool={pool} /></div>
-            <div className="text-purple-400">
-              {formatApy(pool.apyReward)}
-              {rewardPct !== null && <span className="text-slate-500 ml-1">({rewardPct.toFixed(0)}%)</span>}
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1 text-slate-500">1D <MetricInfo metric="change1d" value={pool.apyPct1D} pool={pool} /></div>
-            <div className={formatChange(pool.apyPct1D).color}>{formatChange(pool.apyPct1D).text}</div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1 text-slate-500">7D <MetricInfo metric="change7d" value={pool.apyPct7D} pool={pool} /></div>
-            <div className={formatChange(pool.apyPct7D).color}>{formatChange(pool.apyPct7D).text}</div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-4 gap-2 mt-2 text-xs border-t border-slate-700 pt-2">
-          <div>
-            <div className="flex items-center gap-1 text-slate-500">σ <MetricInfo metric="sigma" value={pool.sigma} pool={pool} /></div>
-            <div className={formatSigma(pool.sigma).color}>{formatSigma(pool.sigma).text}</div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1 text-slate-500">Stable <MetricInfo metric="stablecoin" value={pool.stablecoin} pool={pool} /></div>
-            <div className={pool.stablecoin ? 'text-green-400' : 'text-slate-500'}>
-              {pool.stablecoin ? 'Yes' : 'No'}
-            </div>
-          </div>
-          <div className="col-span-2">
-            <div className="flex items-center gap-1 text-slate-500">Prediction <MetricInfo metric="prediction" value={pool.predictions} pool={pool} /></div>
-            <div className={formatPrediction(pool.predictions).color}>
-              {formatPrediction(pool.predictions).text}
-            </div>
-          </div>
-        </div>
-
-        {/* Average APY row - always show if Avg30 available */}
-        {(pool.apyMean30d !== null || metrics) && (
-          <div className="grid grid-cols-2 gap-2 mt-2 text-xs border-t border-slate-700 pt-2">
-            <div>
-              <div className="flex items-center gap-1 text-slate-500">Avg30 <MetricInfo metric="avg30" value={pool.apyMean30d} pool={pool} /></div>
-              {pool.apyMean30d !== null ? (
-                <div className="flex items-center gap-1">
-                  <span className="text-cyan-400">{pool.apyMean30d.toFixed(1)}%</span>
-                  <span className={pool.apy > pool.apyMean30d ? 'text-green-400' : 'text-red-400'}>
-                    {pool.apy > pool.apyMean30d ? '↑' : '↓'}
-                  </span>
-                </div>
-              ) : <div className="text-slate-500">-</div>}
-            </div>
-            <div>
-              <div className="flex items-center gap-1 text-slate-500">Avg90 <MetricInfo metric="avg90" value={metrics?.base90} pool={pool} metrics={metrics ?? undefined} /></div>
-              {metrics ? (
-                <div className="flex items-center gap-1">
-                  <span className="text-cyan-400">{metrics.base90.toFixed(1)}%</span>
-                  {pool.apyBase !== null && (
-                    <span className={pool.apyBase > metrics.base90 ? 'text-green-400' : 'text-red-400'}>
-                      {pool.apyBase > metrics.base90 ? '↑' : '↓'}
-                    </span>
-                  )}
-                </div>
-              ) : <div className="text-slate-500">-</div>}
-            </div>
-          </div>
-        )}
-
-        {metrics && (
-          <div className="grid grid-cols-4 gap-2 mt-2 text-xs border-t border-slate-700 pt-2">
-            <div>
-              <div className="flex items-center gap-1 text-slate-500">Days <MetricInfo metric="days" value={metrics.dataPoints} pool={pool} metrics={metrics} /></div>
-              <div className="text-slate-400">{metrics.dataPoints}</div>
-            </div>
-            <div>
-              <div className="flex items-center gap-1 text-slate-500">Vol <MetricInfo metric="volatility" value={metrics.volatility} pool={pool} metrics={metrics} /></div>
-              <div className={getVolatilityColor(metrics.volatility)}>{metrics.volatility.toFixed(1)}</div>
-            </div>
-            <div>
-              <div className="flex items-center gap-1 text-slate-500">Org% <MetricInfo metric="organicPct" value={metrics.organicPct} pool={pool} metrics={metrics} /></div>
-              <div className={getOrganicColor(metrics.organicPct)}>{metrics.organicPct}%</div>
-            </div>
-            <div>
-              <div className="flex items-center gap-1 text-slate-500">TVL Δ <MetricInfo metric="tvlChange" value={metrics.tvlChange30d} pool={pool} metrics={metrics} /></div>
-              <div className={getTvlFlowColor(metrics.tvlChange30d)}>
-                {metrics.tvlChange30d >= 0 ? '+' : ''}{metrics.tvlChange30d}%
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-700">
-          <div className="flex items-center gap-2">
-            {onFetchSinglePool && (
-              <button
-                onClick={() => onFetchSinglePool(pool.pool)}
-                disabled={isFetching}
-                className={`px-2 py-1 rounded text-xs ${
-                  isFetching
-                    ? 'bg-purple-600 text-white'
-                    : fetchStatus === 'good' || fetchStatus === 'limited'
-                    ? 'bg-green-900/50 text-green-400'
-                    : 'bg-slate-700 text-slate-400'
-                }`}
-                title={
-                  fetchStatus === 'good'
-                    ? `${dataPoints} days of data`
-                    : fetchStatus === 'limited'
-                    ? `New pool - only ${dataPoints} days of data available`
-                    : 'Fetch historical data'
-                }
-              >
-                {isFetching ? '...' : fetchStatus === 'good' ? `✓ ${dataPoints}d` : fetchStatus === 'limited' ? `✓ ${dataPoints}d` : '↓ Fetch'}
-              </button>
-            )}
-            {onToggleHeld && (
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onToggleHeld(pool.pool, isHeld);
-                }}
-                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                  isHeld
-                    ? 'bg-slate-600 text-yellow-400 hover:bg-red-900/50 hover:text-red-400'
-                    : 'bg-yellow-500 hover:bg-yellow-600 text-slate-900'
-                }`}
-                title={isHeld ? 'Remove from portfolio' : 'Add to portfolio'}
-              >
-                {isHeld ? 'In Portfolio' : '+ Add'}
-              </button>
-            )}
-          </div>
-          <a
-            href={`https://defillama.com/yields/pool/${pool.pool}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-400 hover:underline"
-          >
-            DefiLlama →
-          </a>
-        </div>
-      </div>
+      <PoolInfoCard
+        pool={pool}
+        mode="browse"
+        isHeld={isHeld}
+        onToggleHeld={onToggleHeld}
+        onFetchHistory={onFetchSinglePool}
+        isFetching={isFetching}
+      />
     );
   };
 
