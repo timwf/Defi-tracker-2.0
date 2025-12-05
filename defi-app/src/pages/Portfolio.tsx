@@ -37,6 +37,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [editAmount, setEditAmount] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
 
   // Get list of pool IDs already in portfolio
   const heldPoolIds = useMemo(() => positions.map(p => p.poolId), [positions]);
@@ -280,6 +281,19 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     setEditingId(null);
   };
 
+  const handleFetchHistory = async (poolId: string) => {
+    setFetchingPoolId(poolId);
+    try {
+      await fetchPoolHistoryWithCache(poolId, true);
+      // Trigger re-render by refreshing positions
+      if (onRefreshPositions) {
+        await onRefreshPositions();
+      }
+    } finally {
+      setFetchingPoolId(null);
+    }
+  };
+
   const formatCurrency = (value: number) => {
     if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
     if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
@@ -410,6 +424,8 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                         alerts={alerts}
                         onEdit={handleStartEdit}
                         onRemove={handleRemove}
+                        onFetchHistory={handleFetchHistory}
+                        isFetching={fetchingPoolId === position.poolId}
                       />
                     )}
                   </div>

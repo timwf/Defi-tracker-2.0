@@ -434,6 +434,21 @@ export function PoolInfoCard({
 
         {mode === 'portfolio' && (
           <div className="flex items-center gap-2">
+            {onFetchHistory && (
+              <button
+                onClick={() => onFetchHistory(pool.pool)}
+                disabled={isFetching}
+                className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                  isFetching
+                    ? 'bg-purple-600 text-white animate-pulse'
+                    : hasHistoricalData
+                    ? 'bg-green-900/50 text-green-400 hover:bg-green-800/50'
+                    : 'bg-slate-700 text-slate-300 hover:bg-purple-600 hover:text-white'
+                }`}
+              >
+                {isFetching ? 'Fetching...' : hasHistoricalData ? `✓ ${dataPoints}d` : '↓ Fetch'}
+              </button>
+            )}
             {onEdit && position && (
               <button
                 onClick={() => onEdit(position)}
