@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import type { Pool, PoolsResponse, SavedView, HeldPosition } from './types/pool';
 import type { FetchProgress } from './utils/historicalData';
+import { fetchPoolHistoryWithCache, isCacheValid } from './utils/historicalData';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NavHeader } from './components/NavHeader';
 import { AddPositionModal } from './components/AddPositionModal';
@@ -205,7 +206,19 @@ function AppContent() {
     await addPositionToDb({ poolId: pendingPoolId, amountUsd, entryDate });
     const positions = await fetchPositions();
     setHeldPositions(positions);
+
+    // Auto-fetch historical data if not already cached
+    const poolIdToFetch = pendingPoolId;
     setPendingPoolId(null);
+
+    if (!isCacheValid(poolIdToFetch)) {
+      // Fetch in background without blocking UI
+      fetchPoolHistoryWithCache(poolIdToFetch).then(() => {
+        setHistoricalDataVersion(v => v + 1);
+      }).catch(err => {
+        console.error('Failed to fetch historical data:', err);
+      });
+    }
 
     // Restore scroll after React re-renders
     requestAnimationFrame(() => {

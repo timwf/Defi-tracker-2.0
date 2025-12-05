@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { Pool, HeldPosition, CalculatedMetrics } from '../types/pool';
 import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../utils/heldPositions';
-import { getCachedData, getPoolMetrics } from '../utils/historicalData';
+import { getCachedData, getPoolMetrics, fetchPoolHistoryWithCache, isCacheValid } from '../utils/historicalData';
 import { Sparkline } from '../components/Sparkline';
 import { MetricInfo } from '../components/MetricInfo';
 import { PoolSearchInput } from '../components/PoolSearchInput';
@@ -201,6 +201,8 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
     setSaving(true);
     try {
+      const poolIdToFetch = selectedPool.pool;
+
       await addPositionToDb({
         poolId: selectedPool.pool,
         amountUsd: amount,
@@ -210,6 +212,18 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
       if (onRefreshPositions) {
         await onRefreshPositions();
+      }
+
+      // Auto-fetch historical data if not already cached
+      if (!isCacheValid(poolIdToFetch)) {
+        fetchPoolHistoryWithCache(poolIdToFetch).then(() => {
+          // Trigger re-render by refreshing positions again
+          if (onRefreshPositions) {
+            onRefreshPositions();
+          }
+        }).catch(err => {
+          console.error('Failed to fetch historical data:', err);
+        });
       }
 
       setSelectedPool(null);
