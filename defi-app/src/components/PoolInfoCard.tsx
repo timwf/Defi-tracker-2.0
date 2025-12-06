@@ -199,7 +199,7 @@ export function PoolInfoCard({
 
           {/* DefiLlama Prediction */}
           {pool.predictions?.predictedClass && (
-            <div className="text-right">
+            <div className="text-right group">
               <div className="flex items-center justify-end gap-1.5">
                 <span className={`text-2xl ${
                   pool.predictions.predictedClass.toLowerCase().includes('up') ? 'text-green-400' :
@@ -219,7 +219,7 @@ export function PoolInfoCard({
               </div>
               {pool.predictions.predictedProbability !== undefined && (
                 <div className="text-sm text-slate-400 mt-0.5">
-                  {(pool.predictions.predictedProbability * 100).toFixed(0)}% conf
+                  {pool.predictions.predictedProbability.toFixed(0)}% conf
                 </div>
               )}
               {/* Confidence dots (1-4) */}
@@ -239,7 +239,10 @@ export function PoolInfoCard({
                   ))}
                 </div>
               )}
-              <div className="text-xs text-slate-500 mt-1">Prediction</div>
+              <div className="text-xs text-slate-500 mt-1 flex items-center justify-end gap-1">
+                Prediction
+                <MetricInfo metric="prediction" pool={pool} />
+              </div>
             </div>
           )}
         </div>

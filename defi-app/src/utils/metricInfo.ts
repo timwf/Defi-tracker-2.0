@@ -231,9 +231,17 @@ export const metricDefinitions: Record<MetricType, MetricDefinition> = {
   },
 
   prediction: {
-    title: 'ML Prediction',
-    brief: 'DefiLlama\'s machine learning prediction for APY direction.',
-    detailed: 'DefiLlama uses ML to predict if APY will go up, down, or stay stable. Shows predicted class and confidence %.\n\n**Caveats:**\n- ML predictions are not guarantees\n- Confidence % indicates model certainty\n- Use as one input among many, not as sole decision factor\n- Past patterns don\'t guarantee future results',
+    title: 'DefiLlama ML Prediction',
+    brief: 'Machine learning prediction for APY direction based on historical patterns.',
+    detailed: 'DefiLlama uses machine learning to predict if APY will go up, down, or stay stable based on historical data patterns.\n\n**Prediction Classes:**\n- Up = APY expected to increase\n- Down = APY expected to decrease\n- Stable = APY expected to remain similar\n\n**Confidence:**\n- Probability % = model\'s certainty in prediction\n- Dots (1-4) = binned confidence level\n\n**Important Caveats:**\n- ML predictions are not guarantees\n- Based on historical patterns that may not repeat\n- Use as one input among many, not as sole decision factor\n- Market conditions can change rapidly',
+    interpretation: (_value: any, pool?: Pool) => {
+      if (!pool?.predictions) return 'No prediction available for this pool.';
+      const pred = pool.predictions;
+      const confLevel = pred.binnedConfidence === 4 ? 'very high' :
+                        pred.binnedConfidence === 3 ? 'high' :
+                        pred.binnedConfidence === 2 ? 'moderate' : 'low';
+      return `DefiLlama predicts "${pred.predictedClass}" with ${pred.predictedProbability}% probability (${confLevel} confidence). This is based on pattern analysis, not a guarantee.`;
+    },
   },
 
   stablecoin: {
