@@ -363,8 +363,8 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
           {/* Summary Table */}
           {positionsWithPools.length > 0 && (
-            <div className="bg-slate-800 rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-slate-800 rounded-lg overflow-x-auto">
+              <table className="w-full text-sm min-w-[400px]">
                 <thead>
                   <tr className="border-b border-slate-700 text-slate-400 text-xs">
                     <th className="text-left py-2 px-3 font-medium">Pool</th>
@@ -380,8 +380,22 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                     const tvlChange = metrics?.tvlChange30d;
                     const pred = pool.predictions;
 
+                    const scrollToCard = () => {
+                      const el = document.getElementById(`position-${position.poolId}`);
+                      if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        // Brief highlight effect
+                        el.classList.add('ring-2', 'ring-yellow-500/50');
+                        setTimeout(() => el.classList.remove('ring-2', 'ring-yellow-500/50'), 1500);
+                      }
+                    };
+
                     return (
-                      <tr key={position.poolId} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                      <tr
+                        key={position.poolId}
+                        className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer"
+                        onClick={scrollToCard}
+                      >
                         <td className="py-2 px-3">
                           <span className="text-white font-medium">{pool.symbol}</span>
                           <span className="text-slate-500 text-xs ml-1 hidden sm:inline">{pool.project}</span>
@@ -437,7 +451,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                 const isEditing = editingId === position.poolId;
 
                 return (
-                  <div key={position.poolId}>
+                  <div key={position.poolId} id={`position-${position.poolId}`} className="transition-all duration-300">
                     {isEditing ? (
                       /* Edit form shown separately */
                       <div className="bg-slate-800 rounded-lg p-4 ring-2 ring-blue-500/50">
