@@ -110,65 +110,12 @@ export function HistoricalFetch({
   const estimatedSeconds = needsFetching * 1.5;
   const estimatedTime = Math.ceil(estimatedSeconds / 60);
 
-  // Show sticky bar on mobile when fetch is needed or in progress
-  const showStickyMobile = (!allLoaded || isFetching) && visiblePoolIds.length > 0;
-
   return (
     <>
-      {/* Mobile sticky fetch bar - sticks below header when scrolled past */}
-      {showStickyMobile && (
-        <div className="md:hidden sticky top-[110px] z-30 bg-slate-800 border-b border-slate-700 p-3 -mx-4 mb-4">
-          {isFetching && progress ? (
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <div className="w-full bg-slate-700 rounded-full h-2">
-                  <div
-                    className="bg-yellow-500 h-2 rounded-full transition-all"
-                    style={{ width: `${(progress.current / progress.total) * 100}%` }}
-                  />
-                </div>
-                <div className="text-xs text-slate-400 mt-1">
-                  {progress.current}/{progress.total} pools
-                  {errorCount > 0 && <span className="text-red-400 ml-1">({errorCount} failed)</span>}
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  onCancelFetch();
-                  onFetchComplete();
-                }}
-                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-500"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <button
-                onClick={handleFetchVisible}
-                disabled={visiblePoolIds.length === 0}
-                className="w-full px-4 py-2.5 text-base font-semibold bg-yellow-500 text-slate-900 rounded-lg hover:bg-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Fetch Historical Data ({needsFetching} pools)
-              </button>
-              {cacheStats.total > 0 && (
-                <button
-                  onClick={handleClearCache}
-                  className="w-full text-xs text-slate-500 hover:text-red-400 underline"
-                  title={`Clear all cached historical data (${cacheStats.total} pools)`}
-                >
-                  Not fetching? Clear history cache
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="bg-slate-800 p-4 rounded-lg mb-4">
-        {/* Main Fetch Section - hidden on mobile when sticky is shown */}
+        {/* Main Fetch Section */}
         {!allLoaded && !isFetching && (
-          <div className="hidden md:block mb-4">
+          <div className="mb-4">
             <p className="text-sm text-slate-300 mb-2">
               Load 90-day history to see Avg90, volatility, and TVL trends
             </p>
@@ -198,9 +145,9 @@ export function HistoricalFetch({
           </div>
         )}
 
-        {/* Progress bar when fetching - hidden on mobile (shown in sticky bar) */}
+        {/* Progress bar when fetching */}
         {isFetching && progress && (
-          <div className="hidden md:block mb-4">
+          <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-slate-300">Fetching historical data...</span>
               <span className="text-sm text-slate-400">

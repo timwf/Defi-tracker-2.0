@@ -1,6 +1,7 @@
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import type { FetchProgress } from '../utils/historicalData';
 
 interface NavHeaderProps {
   poolCount: number;
@@ -8,6 +9,12 @@ interface NavHeaderProps {
   onRefresh: () => void;
   loading: boolean;
   positionCount?: number;
+  // Mobile fetch button props
+  needsFetchingCount?: number;
+  isFetching?: boolean;
+  fetchProgress?: FetchProgress | null;
+  onFetchClick?: () => void;
+  onCancelFetch?: () => void;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -22,9 +29,31 @@ function formatTimeAgo(timestamp: number): string {
 
 const POOLS_SEARCH_KEY = 'defi-tracker-pools-search';
 
-export function NavHeader({ poolCount, lastUpdated, onRefresh, loading, positionCount }: NavHeaderProps) {
+export function NavHeader({
+  poolCount,
+  lastUpdated,
+  onRefresh,
+  loading,
+  positionCount,
+  needsFetchingCount = 0,
+  isFetching = false,
+  fetchProgress,
+  onFetchClick,
+  onCancelFetch,
+}: NavHeaderProps) {
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const [isScrolledPastFilters, setIsScrolledPastFilters] = useState(false);
+
+  // Track scroll position to show/hide mobile fetch button
+  useEffect(() => {
+    const handleScroll = () => {
+      // Show button when scrolled past ~300px (filters section height)
+      setIsScrolledPastFilters(window.scrollY > 300);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Remember the last pools search params in sessionStorage
   useEffect(() => {
@@ -32,6 +61,11 @@ export function NavHeader({ poolCount, lastUpdated, onRefresh, loading, position
       sessionStorage.setItem(POOLS_SEARCH_KEY, location.search);
     }
   }, [location]);
+
+  // Only show on pools page, on mobile, when scrolled and needs fetching
+  const showMobileFetchButton = location.pathname === '/pools' &&
+    isScrolledPastFilters &&
+    (needsFetchingCount > 0 || isFetching);
 
   // Build the pools link - preserve search params when navigating back
   const getPoolsLink = () => {
@@ -67,6 +101,35 @@ export function NavHeader({ poolCount, lastUpdated, onRefresh, loading, position
         </div>
       </div>
       <div className="flex items-center gap-2 sm:gap-4">
+        {/* Mobile fetch button - shows when scrolled past filters */}
+        {showMobileFetchButton && (
+          <div className="md:hidden">
+            {isFetching && fetchProgress ? (
+              <div className="flex items-center gap-2">
+                <div className="w-16 bg-slate-700 rounded-full h-1.5">
+                  <div
+                    className="bg-yellow-500 h-1.5 rounded-full transition-all"
+                    style={{ width: `${(fetchProgress.current / fetchProgress.total) * 100}%` }}
+                  />
+                </div>
+                <span className="text-xs text-slate-400">{fetchProgress.current}/{fetchProgress.total}</span>
+                <button
+                  onClick={onCancelFetch}
+                  className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-500"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={onFetchClick}
+                className="px-3 py-1.5 text-sm font-semibold bg-yellow-500 text-slate-900 rounded-lg hover:bg-yellow-400 transition-colors"
+              >
+                ↓ {needsFetchingCount}
+              </button>
+            )}
+          </div>
+        )}
         <nav className="flex gap-2">
           <NavLink
             to={getPoolsLink()}

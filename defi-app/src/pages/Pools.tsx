@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useRef, useState } from 'react';
+import { useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import type { Pool, Filters, SortField, SortDirection, SavedView, HeldPosition } from '../types/pool';
 import { FiltersPanel } from '../components/Filters';
 import { PoolTable } from '../components/PoolTable';
@@ -6,7 +6,7 @@ import { PoolInfoCard } from '../components/PoolInfoCard';
 import { SavedViews } from '../components/SavedViews';
 import { HistoricalFetch } from '../components/HistoricalFetch';
 import { filterPools, getUniqueChains, getUniqueProjects, getAvailableChainsForProjects, getAvailableProjectsForChains } from '../utils/filterPools';
-import { fetchMultiplePoolsHistory, fetchPoolHistoryWithCache, getAllPoolMetrics, type FetchProgress } from '../utils/historicalData';
+import { fetchMultiplePoolsHistory, fetchPoolHistoryWithCache, getAllPoolMetrics, getUncachedPoolIds, type FetchProgress } from '../utils/historicalData';
 
 interface PoolsPageProps {
   pools: Pool[];
@@ -32,6 +32,7 @@ interface PoolsPageProps {
   setFetchingPoolId: (id: string | null) => void;
   historicalDataVersion: number;
   setHistoricalDataVersion: (fn: (v: number) => number) => void;
+  onUncachedPoolIdsChange?: (poolIds: string[]) => void;
 }
 
 export function PoolsPage({
@@ -58,6 +59,7 @@ export function PoolsPage({
   setFetchingPoolId,
   historicalDataVersion,
   setHistoricalDataVersion,
+  onUncachedPoolIdsChange,
 }: PoolsPageProps) {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
@@ -150,6 +152,14 @@ export function PoolsPage({
     () => visiblePools.map((p) => p.pool),
     [visiblePools]
   );
+
+  // Notify parent of uncached pool IDs for mobile header fetch button
+  useEffect(() => {
+    if (onUncachedPoolIdsChange) {
+      const uncached = getUncachedPoolIds(visiblePoolIds);
+      onUncachedPoolIdsChange(uncached);
+    }
+  }, [visiblePoolIds, historicalDataVersion, onUncachedPoolIdsChange]);
 
   const handleSort = (field: SortField) => {
     if (field === sortField) {
