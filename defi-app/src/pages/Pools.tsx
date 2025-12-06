@@ -33,6 +33,7 @@ interface PoolsPageProps {
   historicalDataVersion: number;
   setHistoricalDataVersion: (fn: (v: number) => number) => void;
   onUncachedPoolIdsChange?: (poolIds: string[]) => void;
+  onFetchButtonVisibilityChange?: (isVisible: boolean) => void;
 }
 
 export function PoolsPage({
@@ -60,6 +61,7 @@ export function PoolsPage({
   historicalDataVersion,
   setHistoricalDataVersion,
   onUncachedPoolIdsChange,
+  onFetchButtonVisibilityChange,
 }: PoolsPageProps) {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
@@ -291,6 +293,7 @@ export function PoolsPage({
           isFetching={isFetchingHistorical}
           progress={fetchProgress}
           historicalDataVersion={historicalDataVersion}
+          onFetchButtonVisibilityChange={onFetchButtonVisibilityChange}
         />
       </div>
 

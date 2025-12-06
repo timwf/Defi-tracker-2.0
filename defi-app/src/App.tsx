@@ -54,6 +54,7 @@ function AppContent() {
 
   // Track uncached pools for mobile header fetch button
   const [uncachedPoolIds, setUncachedPoolIds] = useState<string[]>([]);
+  const [fetchButtonVisible, setFetchButtonVisible] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Held positions state
@@ -297,6 +298,7 @@ function AppContent() {
           fetchProgress={fetchProgress}
           onFetchClick={handleMobileFetch}
           onCancelFetch={handleCancelMobileFetch}
+          fetchButtonVisible={fetchButtonVisible}
         />
 
         {migrationMessage && (
@@ -344,6 +346,7 @@ function AppContent() {
                 historicalDataVersion={historicalDataVersion}
                 setHistoricalDataVersion={setHistoricalDataVersion}
                 onUncachedPoolIdsChange={setUncachedPoolIds}
+                onFetchButtonVisibilityChange={setFetchButtonVisible}
               />
             }
           />

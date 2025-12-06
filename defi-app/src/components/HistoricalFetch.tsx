@@ -26,6 +26,7 @@ interface HistoricalFetchProps {
   isFetching: boolean;
   progress: FetchProgress | null;
   historicalDataVersion: number;
+  onFetchButtonVisibilityChange?: (isVisible: boolean) => void;
 }
 
 export function HistoricalFetch({
@@ -41,9 +42,26 @@ export function HistoricalFetch({
   isFetching,
   progress,
   historicalDataVersion,
+  onFetchButtonVisibilityChange,
 }: HistoricalFetchProps) {
   const [justCompleted, setJustCompleted] = useState(false);
   const [errorCount, setErrorCount] = useState(0);
+  const fetchButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Use IntersectionObserver to detect when fetch button is visible
+  useEffect(() => {
+    if (!onFetchButtonVisibilityChange || !fetchButtonRef.current) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        onFetchButtonVisibilityChange(entry.isIntersecting);
+      },
+      { threshold: 0 }
+    );
+
+    observer.observe(fetchButtonRef.current);
+    return () => observer.disconnect();
+  }, [onFetchButtonVisibilityChange]);
 
   // Count how many visible pools have cached data (recalculate when version changes)
   const cachedVisibleCount = useMemo(() =>
@@ -121,6 +139,7 @@ export function HistoricalFetch({
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <button
+                ref={fetchButtonRef}
                 onClick={handleFetchVisible}
                 disabled={visiblePoolIds.length === 0}
                 className="w-full sm:w-auto px-6 py-3 text-base font-semibold bg-yellow-500 text-slate-900 rounded-lg hover:bg-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

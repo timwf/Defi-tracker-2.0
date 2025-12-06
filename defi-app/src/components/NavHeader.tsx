@@ -1,6 +1,6 @@
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import type { FetchProgress } from '../utils/historicalData';
 
 interface NavHeaderProps {
@@ -15,6 +15,7 @@ interface NavHeaderProps {
   fetchProgress?: FetchProgress | null;
   onFetchClick?: () => void;
   onCancelFetch?: () => void;
+  fetchButtonVisible?: boolean;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -40,20 +41,10 @@ export function NavHeader({
   fetchProgress,
   onFetchClick,
   onCancelFetch,
+  fetchButtonVisible = true,
 }: NavHeaderProps) {
   const { user, signOut } = useAuth();
   const location = useLocation();
-  const [isScrolledPastFilters, setIsScrolledPastFilters] = useState(false);
-
-  // Track scroll position to show/hide mobile fetch button
-  useEffect(() => {
-    const handleScroll = () => {
-      // Show button when scrolled past ~300px (filters section height)
-      setIsScrolledPastFilters(window.scrollY > 300);
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   // Remember the last pools search params in sessionStorage
   useEffect(() => {
@@ -62,9 +53,9 @@ export function NavHeader({
     }
   }, [location]);
 
-  // Only show on pools page, on mobile, when scrolled and needs fetching
+  // Only show on pools page, on mobile, when main button is not visible and needs fetching
   const showMobileFetchButton = location.pathname === '/pools' &&
-    isScrolledPastFilters &&
+    !fetchButtonVisible &&
     (needsFetchingCount > 0 || isFetching);
 
   // Build the pools link - preserve search params when navigating back
@@ -101,35 +92,6 @@ export function NavHeader({
         </div>
       </div>
       <div className="flex items-center gap-2 sm:gap-4">
-        {/* Mobile fetch button - shows when scrolled past filters */}
-        {showMobileFetchButton && (
-          <div className="md:hidden">
-            {isFetching && fetchProgress ? (
-              <div className="flex items-center gap-2">
-                <div className="w-16 bg-slate-700 rounded-full h-1.5">
-                  <div
-                    className="bg-yellow-500 h-1.5 rounded-full transition-all"
-                    style={{ width: `${(fetchProgress.current / fetchProgress.total) * 100}%` }}
-                  />
-                </div>
-                <span className="text-xs text-slate-400">{fetchProgress.current}/{fetchProgress.total}</span>
-                <button
-                  onClick={onCancelFetch}
-                  className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-500"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={onFetchClick}
-                className="px-3 py-1.5 text-sm font-semibold bg-yellow-500 text-slate-900 rounded-lg hover:bg-yellow-400 transition-colors"
-              >
-                ↓ {needsFetchingCount}
-              </button>
-            )}
-          </div>
-        )}
         <nav className="flex gap-2">
           <NavLink
             to={getPoolsLink()}
@@ -184,6 +146,36 @@ export function NavHeader({
           )}
         </div>
       </div>
+
+      {/* Mobile fetch button - full width below header content */}
+      {showMobileFetchButton && (
+        <div className="md:hidden w-full mt-2">
+          {isFetching && fetchProgress ? (
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-slate-700 rounded-full h-2">
+                <div
+                  className="bg-yellow-500 h-2 rounded-full transition-all"
+                  style={{ width: `${(fetchProgress.current / fetchProgress.total) * 100}%` }}
+                />
+              </div>
+              <span className="text-sm text-slate-400">{fetchProgress.current}/{fetchProgress.total}</span>
+              <button
+                onClick={onCancelFetch}
+                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-500"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onFetchClick}
+              className="w-full py-2.5 text-sm font-semibold bg-yellow-500 text-slate-900 rounded-lg hover:bg-yellow-400 transition-colors"
+            >
+              Fetch Historical Data ({needsFetchingCount} pools)
+            </button>
+          )}
+        </div>
+      )}
     </header>
   );
 }
