@@ -1,7 +1,8 @@
-import { useMemo, useCallback, useRef } from 'react';
+import { useMemo, useCallback, useRef, useState } from 'react';
 import type { Pool, Filters, SortField, SortDirection, SavedView, HeldPosition } from '../types/pool';
 import { FiltersPanel } from '../components/Filters';
 import { PoolTable } from '../components/PoolTable';
+import { PoolInfoCard } from '../components/PoolInfoCard';
 import { SavedViews } from '../components/SavedViews';
 import { HistoricalFetch } from '../components/HistoricalFetch';
 import { filterPools, getUniqueChains, getUniqueProjects, getAvailableChainsForProjects, getAvailableProjectsForChains } from '../utils/filterPools';
@@ -58,6 +59,8 @@ export function PoolsPage({
   historicalDataVersion,
   setHistoricalDataVersion,
 }: PoolsPageProps) {
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+
   const heldPoolIds = useMemo(
     () => heldPositions.map((p) => p.poolId),
     [heldPositions]
@@ -243,15 +246,40 @@ export function PoolsPage({
         historicalDataVersion={historicalDataVersion}
       />
 
-      <div className="mb-4 text-sm text-slate-400">
-        Showing {visiblePools.length.toLocaleString()} of {filteredAndSortedPools.length.toLocaleString()} pools
+      <div className="mb-4 flex items-center justify-between">
+        <div className="text-sm text-slate-400">
+          Showing {visiblePools.length.toLocaleString()} of {filteredAndSortedPools.length.toLocaleString()} pools
+        </div>
+        {/* View Toggle - desktop only */}
+        <div className="hidden md:flex items-center gap-1 bg-slate-800 rounded-lg p-1">
+          <button
+            onClick={() => setViewMode('cards')}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+              viewMode === 'cards'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Cards
+          </button>
+          <button
+            onClick={() => setViewMode('table')}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+              viewMode === 'table'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Table
+          </button>
+        </div>
       </div>
 
       {loading ? (
         <div className="text-center py-12">
           <div className="text-slate-400">Loading pools...</div>
         </div>
-      ) : (
+      ) : viewMode === 'table' ? (
         <PoolTable
           pools={visiblePools}
           sortField={sortField}
@@ -263,6 +291,20 @@ export function PoolsPage({
           heldPoolIds={heldPoolIds}
           onToggleHeld={onToggleHeld}
         />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {visiblePools.map((pool) => (
+            <PoolInfoCard
+              key={pool.pool}
+              pool={pool}
+              mode="browse"
+              isHeld={heldPoolIds.includes(pool.pool)}
+              onToggleHeld={onToggleHeld}
+              onFetchHistory={handleFetchSinglePool}
+              isFetching={fetchingPoolId === pool.pool}
+            />
+          ))}
+        </div>
       )}
 
       {filteredAndSortedPools.length > 100 && (
