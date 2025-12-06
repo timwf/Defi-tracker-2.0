@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import type { Pool, HeldPosition, CalculatedMetrics } from '../types/pool';
 import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../utils/heldPositions';
 import { getCachedData, getPoolMetrics, fetchPoolHistoryWithCache, isCacheValid } from '../utils/historicalData';
+import { formatTvl } from '../utils/filterPools';
 import { MetricInfo } from '../components/MetricInfo';
 import { PoolSearchInput } from '../components/PoolSearchInput';
 import { PoolInfoCard } from '../components/PoolInfoCard';
@@ -359,6 +360,72 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         {/* Positions List */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-lg font-semibold text-white">Positions ({positionsWithPools.length})</h2>
+
+          {/* Summary Table */}
+          {positionsWithPools.length > 0 && (
+            <div className="bg-slate-800 rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700 text-slate-400 text-xs">
+                    <th className="text-left py-2 px-3 font-medium">Pool</th>
+                    <th className="text-right py-2 px-3 font-medium">Amount</th>
+                    <th className="text-right py-2 px-3 font-medium">APY</th>
+                    <th className="text-right py-2 px-3 font-medium">TVL</th>
+                    <th className="text-center py-2 px-3 font-medium">Pred</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {positionsWithPools.map(({ position, pool, yesterdayApy, metrics }) => {
+                    const apyChange = yesterdayApy !== null ? pool.apy - yesterdayApy : null;
+                    const tvlChange = metrics?.tvlChange30d;
+                    const pred = pool.predictions;
+
+                    return (
+                      <tr key={position.poolId} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                        <td className="py-2 px-3">
+                          <span className="text-white font-medium">{pool.symbol}</span>
+                          <span className="text-slate-500 text-xs ml-1 hidden sm:inline">{pool.project}</span>
+                        </td>
+                        <td className="text-right py-2 px-3 text-slate-300">
+                          {formatCurrency(position.amountUsd)}
+                        </td>
+                        <td className="text-right py-2 px-3">
+                          <span className="text-green-400">{pool.apy.toFixed(1)}%</span>
+                          {apyChange !== null && (
+                            <span className={`ml-1 ${apyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {apyChange >= 0 ? '▲' : '▼'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-right py-2 px-3">
+                          <span className="text-slate-300">{formatTvl(pool.tvlUsd)}</span>
+                          {tvlChange !== undefined && (
+                            <span className={`ml-1 ${tvlChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {tvlChange >= 0 ? '▲' : '▼'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-center py-2 px-3">
+                          {pred?.predictedClass ? (
+                            <span className={
+                              pred.predictedClass.toLowerCase().includes('up') ? 'text-green-400' :
+                              pred.predictedClass.toLowerCase().includes('down') ? 'text-red-400' :
+                              'text-yellow-400'
+                            }>
+                              {pred.predictedClass.toLowerCase().includes('up') ? '↗' :
+                               pred.predictedClass.toLowerCase().includes('down') ? '↘' : '→'}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {positionsWithPools.length === 0 ? (
             <div className="bg-slate-800 rounded-lg p-8 text-center text-slate-400">
