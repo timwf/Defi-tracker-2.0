@@ -216,35 +216,73 @@ export function PoolsPage({
         hasActiveFilters={hasActiveFilters}
       />
 
-      <FiltersPanel
-        filters={filters}
-        onFiltersChange={setFilters}
-        availableChains={availableChains}
-        availableProjects={availableProjects}
-        allChains={allChains}
-        allProjects={allProjects}
-        allSymbols={allSymbols}
-      />
+      {/* Desktop: 2-column layout for filters and historical fetch */}
+      <div className="hidden md:grid md:grid-cols-3 gap-4 mb-4">
+        <div className="md:col-span-2">
+          <FiltersPanel
+            filters={filters}
+            onFiltersChange={setFilters}
+            availableChains={availableChains}
+            availableProjects={availableProjects}
+            allChains={allChains}
+            allProjects={allProjects}
+            allSymbols={allSymbols}
+          />
+        </div>
+        <div>
+          <HistoricalFetch
+            visiblePoolIds={visiblePoolIds}
+            visiblePools={visiblePools}
+            filters={filters}
+            heldPositions={heldPositions}
+            onFetchStart={() => {
+              setIsFetchingHistorical(true);
+            }}
+            onFetchComplete={() => {
+              setIsFetchingHistorical(false);
+              setFetchProgress(null);
+            }}
+            onFetchPools={handleFetchPools}
+            onCancelFetch={handleCancelFetch}
+            onClearCache={() => setHistoricalDataVersion((v) => v + 1)}
+            isFetching={isFetchingHistorical}
+            progress={fetchProgress}
+            historicalDataVersion={historicalDataVersion}
+          />
+        </div>
+      </div>
 
-      <HistoricalFetch
-        visiblePoolIds={visiblePoolIds}
-        visiblePools={visiblePools}
-        filters={filters}
-        heldPositions={heldPositions}
-        onFetchStart={() => {
-          setIsFetchingHistorical(true);
-        }}
-        onFetchComplete={() => {
-          setIsFetchingHistorical(false);
-          setFetchProgress(null);
-        }}
-        onFetchPools={handleFetchPools}
-        onCancelFetch={handleCancelFetch}
-        onClearCache={() => setHistoricalDataVersion((v) => v + 1)}
-        isFetching={isFetchingHistorical}
-        progress={fetchProgress}
-        historicalDataVersion={historicalDataVersion}
-      />
+      {/* Mobile: stacked layout */}
+      <div className="md:hidden">
+        <FiltersPanel
+          filters={filters}
+          onFiltersChange={setFilters}
+          availableChains={availableChains}
+          availableProjects={availableProjects}
+          allChains={allChains}
+          allProjects={allProjects}
+          allSymbols={allSymbols}
+        />
+        <HistoricalFetch
+          visiblePoolIds={visiblePoolIds}
+          visiblePools={visiblePools}
+          filters={filters}
+          heldPositions={heldPositions}
+          onFetchStart={() => {
+            setIsFetchingHistorical(true);
+          }}
+          onFetchComplete={() => {
+            setIsFetchingHistorical(false);
+            setFetchProgress(null);
+          }}
+          onFetchPools={handleFetchPools}
+          onCancelFetch={handleCancelFetch}
+          onClearCache={() => setHistoricalDataVersion((v) => v + 1)}
+          isFetching={isFetchingHistorical}
+          progress={fetchProgress}
+          historicalDataVersion={historicalDataVersion}
+        />
+      </div>
 
       <div className="mb-4 flex items-center justify-between">
         <div className="text-sm text-slate-400">
