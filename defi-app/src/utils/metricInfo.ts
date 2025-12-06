@@ -233,14 +233,15 @@ export const metricDefinitions: Record<MetricType, MetricDefinition> = {
   prediction: {
     title: 'DefiLlama ML Prediction',
     brief: 'Machine learning prediction for APY direction based on historical patterns.',
-    detailed: 'DefiLlama uses machine learning to predict if APY will go up, down, or stay stable based on historical data patterns.\n\n**Prediction Classes:**\n- Up = APY expected to increase\n- Down = APY expected to decrease\n- Stable = APY expected to remain similar\n\n**Confidence:**\n- Probability % = model\'s certainty in prediction\n- Dots (1-4) = binned confidence level\n\n**Important Caveats:**\n- ML predictions are not guarantees\n- Based on historical patterns that may not repeat\n- Use as one input among many, not as sole decision factor\n- Market conditions can change rapidly',
+    detailed: 'DefiLlama uses machine learning to predict whether a pool\'s APY will go up, down, or stay stable over the next period.\n\n**Prediction Classes:**\n- Up = APY expected to increase\n- Down = APY expected to decrease  \n- Stable/Up or Stable/Down = APY expected to remain mostly stable with slight tendency\n\n**Probability %:**\nThe model\'s raw confidence in this prediction. Higher % = more certain.\n\n**Confidence Dots (1-4):**\nDefiLlama bins their predictions into 4 confidence tiers:\n- ●○○○ (1) = Low confidence - prediction is uncertain\n- ●●○○ (2) = Moderate confidence\n- ●●●○ (3) = High confidence\n- ●●●● (4) = Very high confidence - strong historical pattern\n\nThe dots consider factors beyond raw probability, including:\n- How consistent the pattern has been historically\n- Sample size and data quality\n- Market conditions and volatility\n\n**Important Caveats:**\n- ML predictions are NOT guarantees\n- Based on historical patterns that may not repeat\n- External events (hacks, token crashes, reward changes) aren\'t predicted\n- Use as one input among many, not as sole decision factor',
     interpretation: (_value: any, pool?: Pool) => {
       if (!pool?.predictions) return 'No prediction available for this pool.';
       const pred = pool.predictions;
       const confLevel = pred.binnedConfidence === 4 ? 'very high' :
                         pred.binnedConfidence === 3 ? 'high' :
                         pred.binnedConfidence === 2 ? 'moderate' : 'low';
-      return `DefiLlama predicts "${pred.predictedClass}" with ${pred.predictedProbability}% probability (${confLevel} confidence). This is based on pattern analysis, not a guarantee.`;
+      const dotsDisplay = '●'.repeat(pred.binnedConfidence) + '○'.repeat(4 - pred.binnedConfidence);
+      return `DefiLlama predicts "${pred.predictedClass}" with ${pred.predictedProbability}% probability.\n\nConfidence: ${dotsDisplay} (${confLevel})\n\nThis is based on pattern analysis, not a guarantee of future performance.`;
     },
   },
 
