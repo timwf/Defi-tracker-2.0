@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import type { Pool, PoolsResponse, SavedView, HeldPosition } from './types/pool';
 import type { FetchProgress } from './utils/historicalData';
-import { fetchPoolHistoryWithCache, isCacheValid, fetchMultiplePoolsHistory } from './utils/historicalData';
+import { fetchPoolHistoryWithCache, isCacheValid } from './utils/historicalData';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NavHeader } from './components/NavHeader';
 import { AddPositionModal } from './components/AddPositionModal';
@@ -51,11 +51,6 @@ function AppContent() {
   const [fetchProgress, setFetchProgress] = useState<FetchProgress | null>(null);
   const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
   const [historicalDataVersion, setHistoricalDataVersion] = useState(0);
-
-  // Track uncached pools for mobile header fetch button
-  const [uncachedPoolIds, setUncachedPoolIds] = useState<string[]>([]);
-  const [fetchButtonVisible, setFetchButtonVisible] = useState(true);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Held positions state
   const [heldPositions, setHeldPositions] = useState<HeldPosition[]>([]);
@@ -248,42 +243,6 @@ function AppContent() {
     setHeldPositions(positions);
   }, []);
 
-  // Mobile header fetch handler
-  const handleMobileFetch = useCallback(async () => {
-    if (uncachedPoolIds.length === 0) return;
-
-    abortControllerRef.current = new AbortController();
-    setIsFetchingHistorical(true);
-    setFetchProgress({ current: 0, total: uncachedPoolIds.length, poolId: '', status: 'fetching' });
-
-    await fetchMultiplePoolsHistory(
-      uncachedPoolIds,
-      (p) => {
-        setFetchProgress(p);
-        if (p.status === 'fetching' || p.status === 'cached') {
-          setHistoricalDataVersion((v) => v + 1);
-        }
-      },
-      3,
-      false,
-      abortControllerRef.current.signal
-    );
-
-    setHistoricalDataVersion((v) => v + 1);
-    setIsFetchingHistorical(false);
-    setFetchProgress(null);
-    abortControllerRef.current = null;
-  }, [uncachedPoolIds]);
-
-  const handleCancelMobileFetch = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setIsFetchingHistorical(false);
-    setFetchProgress(null);
-  }, []);
-
   return (
     <div className="min-h-screen bg-slate-900 p-4">
       <div className="max-w-[1800px] mx-auto">
@@ -293,12 +252,6 @@ function AppContent() {
           onRefresh={fetchPools}
           loading={loading}
           positionCount={heldPositions.length}
-          needsFetchingCount={uncachedPoolIds.length}
-          isFetching={isFetchingHistorical}
-          fetchProgress={fetchProgress}
-          onFetchClick={handleMobileFetch}
-          onCancelFetch={handleCancelMobileFetch}
-          fetchButtonVisible={fetchButtonVisible}
         />
 
         {migrationMessage && (
@@ -345,8 +298,6 @@ function AppContent() {
                 setFetchingPoolId={setFetchingPoolId}
                 historicalDataVersion={historicalDataVersion}
                 setHistoricalDataVersion={setHistoricalDataVersion}
-                onUncachedPoolIdsChange={setUncachedPoolIds}
-                onFetchButtonVisibilityChange={setFetchButtonVisible}
               />
             }
           />
