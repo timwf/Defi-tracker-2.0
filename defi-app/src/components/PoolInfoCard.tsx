@@ -1,6 +1,6 @@
 import type { Pool, CalculatedMetrics, HeldPosition } from '../types/pool';
 import { getCachedData, getPoolMetrics } from '../utils/historicalData';
-import { formatTvl, formatApy, formatChange, formatSigma, formatPrediction } from '../utils/filterPools';
+import { formatTvl, formatApy, formatChange, formatSigma } from '../utils/filterPools';
 import { Sparkline } from './Sparkline';
 import { MetricInfo } from './MetricInfo';
 
@@ -176,8 +176,9 @@ export function PoolInfoCard({
 
       {/* APY HERO SECTION */}
       <div className="p-4 border-b border-slate-700">
-        <div className="flex items-center justify-between gap-4">
-          <div>
+        <div className="flex items-start justify-between gap-4">
+          {/* Current APY */}
+          <div className="flex-1">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-green-400">{formatApy(pool.apy)}</span>
               {apyChange !== null && (
@@ -189,17 +190,62 @@ export function PoolInfoCard({
             <div className="text-xs text-slate-500 mt-1">
               Current APY {apyChange !== null && <span className="text-slate-600">vs yesterday</span>}
             </div>
+            {apyHistory.length >= 2 && (
+              <div className="mt-2">
+                <Sparkline data={apyHistory} width={120} height={28} />
+              </div>
+            )}
           </div>
-          {apyHistory.length >= 2 && (
+
+          {/* DefiLlama Prediction */}
+          {pool.predictions?.predictedClass && (
             <div className="text-right">
-              <Sparkline data={apyHistory} width={100} height={32} />
-              <div className="text-xs text-slate-500 mt-1">30d trend</div>
+              <div className="flex items-center justify-end gap-1.5">
+                <span className={`text-2xl ${
+                  pool.predictions.predictedClass.toLowerCase().includes('up') ? 'text-green-400' :
+                  pool.predictions.predictedClass.toLowerCase().includes('down') ? 'text-red-400' :
+                  'text-yellow-400'
+                }`}>
+                  {pool.predictions.predictedClass.toLowerCase().includes('up') ? '↗' :
+                   pool.predictions.predictedClass.toLowerCase().includes('down') ? '↘' : '→'}
+                </span>
+                <span className={`text-lg font-semibold ${
+                  pool.predictions.predictedClass.toLowerCase().includes('up') ? 'text-green-400' :
+                  pool.predictions.predictedClass.toLowerCase().includes('down') ? 'text-red-400' :
+                  'text-yellow-400'
+                }`}>
+                  {pool.predictions.predictedClass.split('/')[0]}
+                </span>
+              </div>
+              {pool.predictions.predictedProbability !== undefined && (
+                <div className="text-sm text-slate-400 mt-0.5">
+                  {(pool.predictions.predictedProbability * 100).toFixed(0)}% conf
+                </div>
+              )}
+              {/* Confidence dots (1-4) */}
+              {pool.predictions.binnedConfidence !== undefined && (
+                <div className="flex justify-end gap-0.5 mt-1">
+                  {[1, 2, 3, 4].map(i => (
+                    <span
+                      key={i}
+                      className={`w-2 h-2 rounded-full ${
+                        i <= pool.predictions!.binnedConfidence
+                          ? pool.predictions!.predictedClass.toLowerCase().includes('up') ? 'bg-green-400' :
+                            pool.predictions!.predictedClass.toLowerCase().includes('down') ? 'bg-red-400' :
+                            'bg-yellow-400'
+                          : 'bg-slate-600'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+              <div className="text-xs text-slate-500 mt-1">Prediction</div>
             </div>
           )}
         </div>
 
         {/* Change Pills */}
-        <div className="grid grid-cols-4 gap-2 mt-4">
+        <div className="grid grid-cols-3 gap-2 mt-4">
           <div className="bg-slate-900/50 rounded px-2 py-1.5 text-center">
             <div className="text-xs text-slate-500">1D</div>
             <div className={`text-sm font-medium ${formatChange(pool.apyPct1D).color}`}>
@@ -216,12 +262,6 @@ export function PoolInfoCard({
             <div className="text-xs text-slate-500">30D</div>
             <div className={`text-sm font-medium ${formatChange(pool.apyPct30D).color}`}>
               {formatChange(pool.apyPct30D).text}
-            </div>
-          </div>
-          <div className="bg-slate-900/50 rounded px-2 py-1.5 text-center">
-            <div className="text-xs text-slate-500">Pred</div>
-            <div className={`text-sm font-medium ${formatPrediction(pool.predictions).color}`}>
-              {pool.predictions?.predictedClass ? pool.predictions.predictedClass.split('/')[0] : '-'}
             </div>
           </div>
         </div>
