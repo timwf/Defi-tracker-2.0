@@ -60,6 +60,7 @@ export function PoolsPage({
   setHistoricalDataVersion,
 }: PoolsPageProps) {
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [forceShowHeld, setForceShowHeld] = useState(true);
 
   const heldPoolIds = useMemo(
     () => heldPositions.map((p) => p.poolId),
@@ -86,10 +87,12 @@ export function PoolsPage({
   const filteredAndSortedPools = useMemo(() => {
     const filtered = filterPools(pools, filters);
 
-    // Always include held positions, even if they don't match filters
-    const heldNotInFiltered = pools.filter(
-      (p) => heldPoolIds.includes(p.pool) && !filtered.some((f) => f.pool === p.pool)
-    );
+    // Optionally include held positions even if they don't match filters
+    const heldNotInFiltered = forceShowHeld
+      ? pools.filter(
+          (p) => heldPoolIds.includes(p.pool) && !filtered.some((f) => f.pool === p.pool)
+        )
+      : [];
 
     const combined = [...filtered, ...heldNotInFiltered];
 
@@ -139,7 +142,7 @@ export function PoolsPage({
 
       return 0;
     });
-  }, [pools, filters, sortField, sortDirection, heldPoolIds]);
+  }, [pools, filters, sortField, sortDirection, heldPoolIds, forceShowHeld]);
 
   const visiblePools = useMemo(
     () => filteredAndSortedPools.slice(0, 100),
@@ -227,6 +230,8 @@ export function PoolsPage({
             allChains={allChains}
             allProjects={allProjects}
             allSymbols={allSymbols}
+            forceShowHeld={forceShowHeld}
+            onForceShowHeldChange={setForceShowHeld}
           />
         </div>
         <div>
@@ -262,6 +267,8 @@ export function PoolsPage({
           allChains={allChains}
           allProjects={allProjects}
           allSymbols={allSymbols}
+          forceShowHeld={forceShowHeld}
+          onForceShowHeldChange={setForceShowHeld}
         />
         <HistoricalFetch
           visiblePoolIds={visiblePoolIds}
@@ -284,31 +291,66 @@ export function PoolsPage({
         />
       </div>
 
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-sm text-slate-400">
-          Showing {visiblePools.length.toLocaleString()} of {filteredAndSortedPools.length.toLocaleString()} pools
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-slate-400">
+            Showing {visiblePools.length.toLocaleString()} of {filteredAndSortedPools.length.toLocaleString()} pools
+          </div>
+          {/* View Toggle */}
+          <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                viewMode === 'cards'
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Cards
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                viewMode === 'table'
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Table
+            </button>
+          </div>
         </div>
-        {/* View Toggle - desktop only */}
-        <div className="hidden md:flex items-center gap-1 bg-slate-800 rounded-lg p-1">
-          <button
-            onClick={() => setViewMode('cards')}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              viewMode === 'cards'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-400 hover:text-white'
-            }`}
+        {/* Sort controls - always on mobile, only for cards view on desktop */}
+        <div className={`flex items-center gap-2 bg-slate-800 p-2 rounded-lg ${viewMode === 'table' ? 'md:hidden' : ''}`}>
+          <span className="text-xs text-slate-400">Sort:</span>
+          <select
+            value={sortField}
+            onChange={(e) => handleSort(e.target.value as SortField)}
+            className="flex-1 md:flex-none px-2 py-1 text-sm bg-slate-700 border border-slate-600 rounded text-white"
           >
-            Cards
-          </button>
+            <option value="tvlUsd">TVL</option>
+            <option value="apy">APY</option>
+            <option value="apyBase">Base APY</option>
+            <option value="apyReward">Reward APY</option>
+            <option value="symbol">Symbol</option>
+            <option value="project">Protocol</option>
+            <option value="chain">Chain</option>
+            <option value="stablecoin">Stablecoin</option>
+            <option value="apyMean30d">Avg 30D</option>
+            <option value="base90">Avg 90D *</option>
+            <option value="apyPct1D">1D Change</option>
+            <option value="apyPct7D">7D Change</option>
+            <option value="apyPct30D">30D Change</option>
+            <option value="sigma">Sigma</option>
+            <option value="volatility">Volatility *</option>
+            <option value="organicPct">Organic % *</option>
+            <option value="tvlChange30d">TVL Change *</option>
+          </select>
           <button
-            onClick={() => setViewMode('table')}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              viewMode === 'table'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            onClick={() => handleSort(sortField)}
+            className="px-3 py-1 text-sm bg-slate-700 border border-slate-600 rounded text-white"
           >
-            Table
+            {sortDirection === 'asc' ? '↑ Asc' : '↓ Desc'}
           </button>
         </div>
       </div>
@@ -317,7 +359,7 @@ export function PoolsPage({
         <div className="text-center py-12">
           <div className="text-slate-400">Loading pools...</div>
         </div>
-      ) : viewMode === 'table' ? (
+      ) : (
         <PoolTable
           pools={visiblePools}
           sortField={sortField}
@@ -328,21 +370,8 @@ export function PoolsPage({
           historicalDataVersion={historicalDataVersion}
           heldPoolIds={heldPoolIds}
           onToggleHeld={onToggleHeld}
+          viewMode={viewMode}
         />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visiblePools.map((pool) => (
-            <PoolInfoCard
-              key={pool.pool}
-              pool={pool}
-              mode="browse"
-              isHeld={heldPoolIds.includes(pool.pool)}
-              onToggleHeld={onToggleHeld}
-              onFetchHistory={handleFetchSinglePool}
-              isFetching={fetchingPoolId === pool.pool}
-            />
-          ))}
-        </div>
       )}
 
       {filteredAndSortedPools.length > 100 && (

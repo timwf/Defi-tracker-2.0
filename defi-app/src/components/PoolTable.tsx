@@ -20,6 +20,15 @@ function getApyHistory(poolId: string): number[] {
     .map(d => d.apy);
 }
 
+function getTvlHistory(poolId: string): number[] {
+  const cached = getCachedData(poolId);
+  if (!cached?.data) return [];
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  return cached.data
+    .filter(d => new Date(d.timestamp).getTime() >= thirtyDaysAgo)
+    .map(d => d.tvlUsd);
+}
+
 interface PoolTableProps {
   pools: Pool[];
   sortField: SortField;
@@ -30,6 +39,7 @@ interface PoolTableProps {
   historicalDataVersion: number; // Increment to trigger re-render when data changes
   heldPoolIds: string[];
   onToggleHeld?: (poolId: string, isCurrentlyHeld: boolean) => void;
+  viewMode: 'cards' | 'table';
 }
 
 function formatMetricValue(value: number | undefined, suffix = '%'): string {
@@ -69,11 +79,14 @@ export function PoolTable({
   historicalDataVersion,
   heldPoolIds,
   onToggleHeld,
+  viewMode,
 }: PoolTableProps) {
-  const SortHeader = ({ field, label, tooltip }: { field: SortField; label: string; tooltip?: string }) => (
+  const SortHeader = ({ field, label, tooltip, sticky }: { field: SortField; label: string; tooltip?: string; sticky?: boolean }) => (
     <th
       onClick={() => onSort(field)}
-      className="px-3 py-2 text-left text-xs font-semibold text-slate-300 cursor-pointer hover:bg-slate-700 transition-colors whitespace-nowrap"
+      className={`px-3 py-2 text-left text-xs font-semibold text-slate-300 cursor-pointer hover:bg-slate-700 transition-colors whitespace-nowrap ${
+        sticky ? 'sticky left-0 z-30 bg-slate-800' : ''
+      }`}
       title={tooltip}
     >
       <div className="flex items-center gap-1">
@@ -142,43 +155,25 @@ export function PoolTable({
 
   return (
     <>
-      {/* Mobile card view */}
-      <div className="md:hidden space-y-3">
-        {/* Mobile sort controls */}
-        <div className="flex items-center gap-2 bg-slate-800 p-2 rounded-lg">
-          <span className="text-xs text-slate-400">Sort:</span>
-          <select
-            value={sortField}
-            onChange={(e) => onSort(e.target.value as SortField)}
-            className="flex-1 px-2 py-1 text-sm bg-slate-700 border border-slate-600 rounded text-white"
-          >
-            {sortOptions.map((opt) => (
-              <option key={opt.field} value={opt.field}>{opt.label}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => onSort(sortField)}
-            className="px-3 py-1 text-sm bg-slate-700 border border-slate-600 rounded text-white"
-          >
-            {sortDirection === 'asc' ? '↑ Asc' : '↓ Desc'}
-          </button>
+      {/* Card view */}
+      {viewMode === 'cards' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {pools.map((pool) => (
+            <MobilePoolCard key={pool.pool} pool={pool} />
+          ))}
+          {pools.length === 0 && (
+            <div className="col-span-full text-center py-8 text-slate-400">No pools match your filters</div>
+          )}
         </div>
+      )}
 
-        {pools.map((pool) => (
-          <MobilePoolCard key={pool.pool} pool={pool} />
-        ))}
-        {pools.length === 0 && (
-          <div className="text-center py-8 text-slate-400">No pools match your filters</div>
-        )}
-      </div>
-
-      {/* Desktop table view */}
-      <div className="hidden md:block overflow-auto max-h-[calc(100vh-300px)] rounded-lg border border-slate-700">
+      {/* Table view */}
+      {viewMode === 'table' && (
+      <div className="overflow-auto max-h-[calc(100vh-300px)] rounded-lg border border-slate-700">
       <table className="w-full">
-        <thead className="bg-slate-800 sticky top-0 z-10">
+        <thead className="bg-slate-800 sticky top-0 z-20">
           <tr>
-            <Header label="" tooltip="Click ↓ to fetch historical data for this pool. Green ✓ = data cached." />
-            <SortHeader field="symbol" label="Symbol" tooltip="Pool token symbol. ★ = You hold this position (click star to toggle)." />
+            <SortHeader field="symbol" label="Symbol" tooltip="Pool token symbol. Click ↓ to fetch historical data." sticky />
             <SortHeader field="project" label="Protocol" tooltip="DeFi protocol name. Consider protocol risk: Aave/Compound = battle-tested, newer protocols = higher risk but potentially higher rewards." />
             <SortHeader field="chain" label="Chain" tooltip="Blockchain network. Ethereum = highest security, L2s (Arbitrum, Optimism, Base) = lower fees but bridge risk." />
             <SortHeader field="tvlUsd" label="TVL" tooltip="Total Value Locked in USD. Higher TVL = more liquidity & generally safer. $50M+ = large, $10-50M = medium, <$10M = smaller/riskier." />
@@ -199,6 +194,7 @@ export function PoolTable({
             <Header label="Prediction" tooltip="DEFILLAMA ML PREDICTION. Their machine learning model predicts APY direction. Shows predicted class (Up/Down/Stable) with confidence %. Use as one input, not gospel - ML predictions have limits." />
             <SortHeader field="stablecoin" label="Stable" tooltip="STABLECOIN POOL. Yes = pool contains stablecoins (USDC, USDT, DAI, etc). Stablecoin pools typically have lower impermanent loss risk but may have lower yields. Sort to group stablecoin pools together." />
             <Header label="Link" tooltip="View full pool details on DefiLlama including charts, historical data, and more pool metadata." />
+            <Header label="" tooltip="Add or remove from your portfolio" />
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-700">
@@ -223,53 +219,33 @@ export function PoolTable({
 
             return (
               <tr key={pool.pool} className={`hover:bg-slate-800/50 transition-colors ${isHeld ? 'bg-yellow-900/20' : ''}`}>
-                <td className="px-2 py-2">
-                  {onFetchSinglePool && (
-                    <button
-                      onClick={() => onFetchSinglePool(pool.pool)}
-                      disabled={isFetching}
-                      className={`w-6 h-6 rounded text-xs flex items-center justify-center transition-colors ${
-                        isFetching
-                          ? 'bg-purple-600 text-white animate-pulse'
-                          : fetchStatus === 'good' || fetchStatus === 'limited'
-                          ? 'bg-green-900/50 text-green-400 hover:bg-green-800/50'
-                          : 'bg-slate-700 text-slate-400 hover:bg-purple-600 hover:text-white'
-                      }`}
-                      title={
-                        isFetching
-                          ? 'Fetching...'
-                          : fetchStatus === 'good'
-                          ? `${dataPoints} days of data (${cacheAge})`
-                          : fetchStatus === 'limited'
-                          ? `New pool - only ${dataPoints} days of data (${cacheAge})`
-                          : 'Fetch historical data'
-                      }
-                    >
-                      {isFetching ? '...' : fetchStatus === 'good' || fetchStatus === 'limited' ? '✓' : '↓'}
-                    </button>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-sm font-medium text-white">
-                  <div className="flex items-center gap-2">
-                    {pool.symbol}
-                    {onToggleHeld && (
+                <td className={`px-2 py-1.5 text-xs font-medium text-white sticky left-0 z-10 ${isHeld ? 'bg-yellow-900/30' : 'bg-slate-900'}`}>
+                  <div className="flex items-center gap-1.5">
+                    {onFetchSinglePool && (
                       <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onToggleHeld(pool.pool, isHeld);
-                        }}
-                        className={`px-2 py-0.5 rounded text-xs font-medium transition-colors whitespace-nowrap ${
-                          isHeld
-                            ? 'bg-slate-600 text-yellow-400 hover:bg-red-900/50 hover:text-red-400'
-                            : 'bg-yellow-500 hover:bg-yellow-600 text-slate-900'
+                        onClick={() => onFetchSinglePool(pool.pool)}
+                        disabled={isFetching}
+                        className={`w-5 h-5 rounded text-[10px] flex items-center justify-center transition-colors flex-shrink-0 ${
+                          isFetching
+                            ? 'bg-purple-600 text-white animate-pulse'
+                            : fetchStatus === 'good' || fetchStatus === 'limited'
+                            ? 'bg-green-900/50 text-green-400 hover:bg-green-800/50'
+                            : 'bg-slate-700 text-slate-400 hover:bg-purple-600 hover:text-white'
                         }`}
-                        title={isHeld ? 'Remove from portfolio' : 'Add to portfolio'}
+                        title={
+                          isFetching
+                            ? 'Fetching...'
+                            : fetchStatus === 'good'
+                            ? `${dataPoints} days of data (${cacheAge})`
+                            : fetchStatus === 'limited'
+                            ? `New pool - only ${dataPoints} days of data (${cacheAge})`
+                            : 'Fetch historical data'
+                        }
                       >
-                        {isHeld ? 'In Portfolio' : '+ Add'}
+                        {isFetching ? '…' : fetchStatus === 'good' || fetchStatus === 'limited' ? '✓' : '↓'}
                       </button>
                     )}
+                    <span className="truncate max-w-[120px]">{pool.symbol}</span>
                   </div>
                 </td>
                 <td className="px-3 py-2 text-xs text-slate-300 group">
@@ -287,6 +263,10 @@ export function PoolTable({
                 <td className="px-3 py-2 text-xs text-slate-300 group">
                   <div className="flex items-center gap-1">
                     {formatTvl(pool.tvlUsd)}
+                    {(() => {
+                      const tvlHistory = getTvlHistory(pool.pool);
+                      return tvlHistory.length >= 2 ? <Sparkline data={tvlHistory} width={40} height={16} color="#3b82f6" /> : null;
+                    })()}
                     <MetricInfo metric="tvl" value={pool.tvlUsd} pool={pool} />
                   </div>
                 </td>
@@ -418,6 +398,26 @@ export function PoolTable({
                     View
                   </a>
                 </td>
+                <td className="px-3 py-2 text-xs">
+                  {onToggleHeld && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onToggleHeld(pool.pool, isHeld);
+                      }}
+                      className={`px-2 py-0.5 rounded text-xs font-medium transition-colors whitespace-nowrap ${
+                        isHeld
+                          ? 'bg-slate-600 text-yellow-400 hover:bg-red-900/50 hover:text-red-400'
+                          : 'bg-yellow-500 hover:bg-yellow-600 text-slate-900'
+                      }`}
+                      title={isHeld ? 'Remove from portfolio' : 'Add to portfolio'}
+                    >
+                      {isHeld ? '★' : '+'}
+                    </button>
+                  )}
+                </td>
               </tr>
             );
           })}
@@ -427,6 +427,7 @@ export function PoolTable({
         <div className="text-center py-8 text-slate-400">No pools match your filters</div>
       )}
       </div>
+      )}
     </>
   );
 }

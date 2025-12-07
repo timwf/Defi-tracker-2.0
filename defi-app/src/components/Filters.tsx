@@ -12,6 +12,8 @@ interface FiltersProps {
   allChains: string[];
   allProjects: string[];
   allSymbols: string[];
+  forceShowHeld?: boolean;
+  onForceShowHeldChange?: (value: boolean) => void;
 }
 
 // Format TVL for display in input (e.g., 1000000 -> "1M")
@@ -47,6 +49,8 @@ export const FiltersPanel = memo(function FiltersPanel({
   allChains,
   allProjects,
   allSymbols,
+  forceShowHeld,
+  onForceShowHeldChange,
 }: FiltersProps) {
   // Local state for text inputs - updates immediately for responsive UI
   const [localSearch, setLocalSearch] = useState(filters.search);
@@ -199,6 +203,21 @@ export const FiltersPanel = memo(function FiltersPanel({
           />
           <span className="text-sm text-slate-300">Stables Only</span>
         </label>
+
+        {/* Force Show Held Toggle */}
+        {onForceShowHeldChange && (
+          <button
+            onClick={() => onForceShowHeldChange(!forceShowHeld)}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              forceShowHeld
+                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50'
+                : 'bg-slate-700 text-slate-400 border border-slate-600 hover:bg-slate-600'
+            }`}
+            title={forceShowHeld ? 'Held positions always shown regardless of filters' : 'Held positions follow filter rules'}
+          >
+            {forceShowHeld ? '★ Always Show Held' : '☆ Show Held'}
+          </button>
+        )}
 
         {/* Reset */}
         <button

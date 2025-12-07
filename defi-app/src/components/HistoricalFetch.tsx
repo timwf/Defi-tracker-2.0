@@ -95,6 +95,13 @@ export function HistoricalFetch({
   };
 
   const handleExportDownload = () => {
+    const missingCount = visiblePoolIds.length - cachedVisibleCount;
+    if (missingCount > 0) {
+      const proceed = confirm(
+        `${missingCount} of ${visiblePoolIds.length} pools are missing historical data.\n\nExport anyway?`
+      );
+      if (!proceed) return;
+    }
     const data = exportPoolsForAI(visiblePools, filters, heldPositions);
     downloadExport(data);
   };
@@ -193,12 +200,21 @@ export function HistoricalFetch({
           <button
             onClick={handleExportDownload}
             disabled={visiblePools.length === 0}
-            className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Download current filtered view with historical data as JSON - ideal for AI analysis"
+            className={`px-3 py-1.5 text-sm rounded disabled:opacity-50 disabled:cursor-not-allowed ${
+              allLoaded
+                ? 'bg-green-600 text-white hover:bg-green-500'
+                : 'bg-yellow-600 text-white hover:bg-yellow-500'
+            }`}
+            title={allLoaded
+              ? "Download current filtered view with historical data as JSON - ideal for AI analysis"
+              : `${needsFetching} pools missing historical data - click to export anyway`
+            }
           >
-            Export JSON
+            Export JSON {!allLoaded && `(${needsFetching} missing)`}
           </button>
-          <span className="text-xs text-slate-500">Current view + historical data (for AI)</span>
+          <span className="text-xs text-slate-500">
+            {allLoaded ? 'All data ready for export' : 'Fetch historical data for complete export'}
+          </span>
         </div>
       </div>
       </div>
