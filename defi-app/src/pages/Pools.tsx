@@ -2,7 +2,6 @@ import { useMemo, useCallback, useRef, useState } from 'react';
 import type { Pool, Filters, SortField, SortDirection, SavedView, HeldPosition } from '../types/pool';
 import { FiltersPanel } from '../components/Filters';
 import { PoolTable } from '../components/PoolTable';
-import { PoolInfoCard } from '../components/PoolInfoCard';
 import { SavedViews } from '../components/SavedViews';
 import { HistoricalFetch } from '../components/HistoricalFetch';
 import { filterPools, getUniqueChains, getUniqueProjects, getAvailableChainsForProjects, getAvailableProjectsForChains } from '../utils/filterPools';

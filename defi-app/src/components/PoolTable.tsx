@@ -127,32 +127,6 @@ export function PoolTable({
     );
   };
 
-  const sortOptions: { field: SortField; label: string; group?: string }[] = [
-    // Primary metrics
-    { field: 'tvlUsd', label: 'TVL' },
-    { field: 'apy', label: 'APY' },
-    { field: 'apyBase', label: 'Base APY' },
-    { field: 'apyReward', label: 'Reward APY' },
-    // Identifiers
-    { field: 'symbol', label: 'Symbol' },
-    { field: 'project', label: 'Protocol' },
-    { field: 'chain', label: 'Chain' },
-    { field: 'stablecoin', label: 'Stablecoin' },
-    // Averages
-    { field: 'apyMean30d', label: 'Avg 30D' },
-    { field: 'base90', label: 'Avg 90D *' },
-    // Changes
-    { field: 'apyPct1D', label: '1D Change' },
-    { field: 'apyPct7D', label: '7D Change' },
-    { field: 'apyPct30D', label: '30D Change' },
-    // Volatility
-    { field: 'sigma', label: 'Sigma (σ)' },
-    { field: 'volatility', label: 'Volatility *' },
-    // Historical metrics (require fetch)
-    { field: 'organicPct', label: 'Organic % *' },
-    { field: 'tvlChange30d', label: 'TVL Change *' },
-  ];
-
   return (
     <>
       {/* Card view */}
