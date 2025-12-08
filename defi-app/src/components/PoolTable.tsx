@@ -143,7 +143,7 @@ export function PoolTable({
 
       {/* Table view */}
       {viewMode === 'table' && (
-      <div className="overflow-auto max-h-[calc(100vh-300px)] rounded-lg border border-slate-700">
+      <div className="overflow-auto rounded-lg border border-slate-700">
       <table className="w-full">
         <thead className="bg-slate-800 sticky top-0 z-20">
           <tr>

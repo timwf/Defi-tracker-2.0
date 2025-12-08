@@ -144,7 +144,7 @@ export function PoolsPage({
   }, [pools, filters, sortField, sortDirection, heldPoolIds, forceShowHeld]);
 
   const visiblePools = useMemo(
-    () => filteredAndSortedPools.slice(0, 100),
+    () => filteredAndSortedPools.slice(0, 150),
     [filteredAndSortedPools]
   );
 
@@ -373,9 +373,9 @@ export function PoolsPage({
         />
       )}
 
-      {filteredAndSortedPools.length > 100 && (
+      {filteredAndSortedPools.length > 150 && (
         <div className="mt-4 text-center text-slate-400 text-sm">
-          Showing first 100 results. Use filters to narrow down.
+          Showing first 150 results. Use filters to narrow down.
         </div>
       )}
     </>
