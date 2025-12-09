@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Pool, Filters, HeldPosition } from '../types/pool';
 import type { FetchProgress } from '../utils/historicalData';
 import { isCacheValid, getUncachedPoolIds, clearCache, getCacheStats } from '../utils/historicalData';
-import { exportPoolsForAI, downloadExport } from '../utils/exportData';
+import { AIExportModal } from './AIExportModal';
 
 // Custom hook to track previous value
 function usePrevious<T>(value: T): T | undefined {
@@ -44,6 +44,7 @@ export function HistoricalFetch({
 }: HistoricalFetchProps) {
   const [justCompleted, setJustCompleted] = useState(false);
   const [errorCount, setErrorCount] = useState(0);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Count how many visible pools have cached data (recalculate when version changes)
   const cachedVisibleCount = useMemo(() =>
@@ -92,18 +93,6 @@ export function HistoricalFetch({
     onFetchStart();
     await onFetchPools(uncachedPoolIds);
     onFetchComplete();
-  };
-
-  const handleExportDownload = () => {
-    const missingCount = visiblePoolIds.length - cachedVisibleCount;
-    if (missingCount > 0) {
-      const proceed = confirm(
-        `${missingCount} of ${visiblePoolIds.length} pools are missing historical data.\n\nExport anyway?`
-      );
-      if (!proceed) return;
-    }
-    const data = exportPoolsForAI(visiblePools, filters, heldPositions);
-    downloadExport(data);
   };
 
   const handleClearCache = () => {
@@ -198,7 +187,7 @@ export function HistoricalFetch({
 
         <div className="flex flex-col items-start sm:items-end gap-1">
           <button
-            onClick={handleExportDownload}
+            onClick={() => setIsExportModalOpen(true)}
             disabled={visiblePools.length === 0}
             className={`px-3 py-1.5 text-sm rounded disabled:opacity-50 disabled:cursor-not-allowed ${
               allLoaded
@@ -206,11 +195,11 @@ export function HistoricalFetch({
                 : 'bg-yellow-600 text-white hover:bg-yellow-500'
             }`}
             title={allLoaded
-              ? "Download current filtered view with historical data as JSON - ideal for AI analysis"
-              : `${needsFetching} pools missing historical data - click to export anyway`
+              ? "Export for AI analysis with pre-built prompts"
+              : `${needsFetching} pools missing historical data - fetch first for better analysis`
             }
           >
-            Export JSON {!allLoaded && `(${needsFetching} missing)`}
+            Export for AI {!allLoaded && `(${needsFetching} missing)`}
           </button>
           <span className="text-xs text-slate-500">
             {allLoaded ? 'All data ready for export' : 'Fetch historical data for complete export'}
@@ -218,6 +207,15 @@ export function HistoricalFetch({
         </div>
       </div>
       </div>
+
+      <AIExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        visiblePools={visiblePools}
+        visiblePoolIds={visiblePoolIds}
+        filters={filters}
+        heldPositions={heldPositions}
+      />
     </>
   );
 }
