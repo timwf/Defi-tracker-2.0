@@ -68,6 +68,7 @@ function AppContent() {
 
   // Load user data when user changes (or load from localStorage if not logged in)
   useEffect(() => {
+    console.log('User state changed:', user?.email || 'null');
     if (user) {
       loadUserData();
     } else {
@@ -86,6 +87,8 @@ function AppContent() {
   }
 
   async function loadUserData() {
+    console.log('Loading user data from Supabase...');
+
     // Check for local data to migrate
     const localPositions = getLocalPositions();
     const localViews = getLocalViews();
@@ -109,6 +112,7 @@ function AppContent() {
       fetchViews(),
     ]);
 
+    console.log('Loaded positions:', positions.length, 'views:', views.length);
     setHeldPositions(positions);
     setSavedViews(views);
   }
