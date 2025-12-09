@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import type { Pool, HeldPosition, CalculatedMetrics } from '../types/pool';
 import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../utils/heldPositions';
 import { getCachedData, getPoolMetrics, fetchPoolHistoryWithCache, isCacheValid } from '../utils/historicalData';
@@ -39,6 +39,8 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [editNotes, setEditNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
+  const [autoFetchProgress, setAutoFetchProgress] = useState<{ current: number; total: number } | null>(null);
+  const hasAutoFetched = useRef(false);
 
   // Get list of pool IDs already in portfolio
   const heldPoolIds = useMemo(() => positions.map(p => p.poolId), [positions]);
@@ -151,6 +153,42 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const projectedAnnualEarnings = totalValue * (weightedApy / 100);
   const projectedMonthlyEarnings = projectedAnnualEarnings / 12;
   const projectedDailyEarnings = projectedAnnualEarnings / 365;
+
+  // Auto-fetch stale historical data on page load
+  useEffect(() => {
+    if (pools.length === 0 || positions.length === 0 || hasAutoFetched.current) return;
+
+    const stalePositions = positions.filter(pos => !isCacheValid(pos.poolId));
+    if (stalePositions.length === 0) {
+      hasAutoFetched.current = true;
+      return;
+    }
+
+    hasAutoFetched.current = true;
+
+    const fetchStaleData = async () => {
+      setAutoFetchProgress({ current: 0, total: stalePositions.length });
+
+      for (let i = 0; i < stalePositions.length; i++) {
+        try {
+          await fetchPoolHistoryWithCache(stalePositions[i].poolId);
+        } catch (err) {
+          console.error('Failed to fetch history for', stalePositions[i].poolId, err);
+        }
+        setAutoFetchProgress({ current: i + 1, total: stalePositions.length });
+        if (i < stalePositions.length - 1) {
+          await new Promise(r => setTimeout(r, 1500)); // Rate limit
+        }
+      }
+
+      setAutoFetchProgress(null);
+      if (onRefreshPositions) {
+        onRefreshPositions();
+      }
+    };
+
+    fetchStaleData();
+  }, [pools.length, positions.length, onRefreshPositions]);
 
   // Organic APY - weighted by base yield only (excludes reward tokens)
   const organicApy = useMemo(() => {
@@ -303,6 +341,17 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
   return (
     <div className="space-y-6">
+      {/* Auto-fetch progress banner */}
+      {autoFetchProgress && (
+        <div className="bg-purple-900/50 text-purple-200 px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Refreshing historical data... {autoFetchProgress.current}/{autoFetchProgress.total} positions
+        </div>
+      )}
+
       {/* Summary Bar */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
         <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
