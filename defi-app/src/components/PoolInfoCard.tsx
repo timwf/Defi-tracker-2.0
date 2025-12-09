@@ -251,8 +251,8 @@ export function PoolInfoCard({
         <div className="grid grid-cols-3 gap-2 mt-4">
           <div className="bg-slate-900/50 rounded px-2 py-1.5 text-center">
             <div className="text-xs text-slate-500">1D</div>
-            <div className={`text-sm font-medium ${formatChange(pool.apyPct1D).color}`}>
-              {formatChange(pool.apyPct1D).text}
+            <div className={`text-sm font-medium ${formatChange(pool.apyPct1D ?? apyChange).color}`}>
+              {formatChange(pool.apyPct1D ?? apyChange).text}
             </div>
           </div>
           <div className="bg-slate-900/50 rounded px-2 py-1.5 text-center">
