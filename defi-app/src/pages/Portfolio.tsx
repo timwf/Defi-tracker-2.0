@@ -45,6 +45,11 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   // Get list of pool IDs already in portfolio
   const heldPoolIds = useMemo(() => positions.map(p => p.poolId), [positions]);
 
+  // Find orphaned positions (positions without matching pools)
+  const orphanedPositions = useMemo(() => {
+    return positions.filter(pos => !pools.find(p => p.pool === pos.poolId));
+  }, [positions, pools]);
+
   // Get positions with pool info, metrics, and alerts
   const positionsWithPools = useMemo<PositionWithPool[]>(() => {
     return positions
@@ -121,10 +126,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       .filter((x): x is PositionWithPool => x !== null);
   }, [positions, pools]);
 
-  // Portfolio calculations
+  // Portfolio calculations - only include positions with matching pools
   const totalValue = useMemo(() =>
-    positions.reduce((sum, p) => sum + p.amountUsd, 0),
-    [positions]
+    positionsWithPools.reduce((sum, { position }) => sum + position.amountUsd, 0),
+    [positionsWithPools]
   );
 
   const weightedApy = useMemo(() => {
@@ -341,6 +346,40 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
   return (
     <div className="space-y-6">
+      {/* Orphaned positions warning */}
+      {orphanedPositions.length > 0 && (
+        <div className="bg-amber-900/50 border border-amber-600 text-amber-200 px-4 py-3 rounded-lg text-sm">
+          <div className="flex items-start gap-2">
+            <span className="text-amber-400">⚠</span>
+            <div className="flex-1">
+              <p className="font-medium mb-1">
+                {orphanedPositions.length} position{orphanedPositions.length > 1 ? 's' : ''} no longer found in DefiLlama
+              </p>
+              <p className="text-amber-300/80 text-xs mb-2">
+                These pools may have been deprecated or removed. You can remove them to clean up your portfolio.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {orphanedPositions.map(pos => (
+                  <div key={pos.poolId} className="flex items-center gap-1 bg-amber-900/50 px-2 py-1 rounded text-xs">
+                    <span className="text-amber-300 truncate max-w-[120px]" title={pos.poolId}>
+                      {pos.poolId.slice(0, 8)}...
+                    </span>
+                    <span className="text-amber-400">${pos.amountUsd.toFixed(0)}</span>
+                    <button
+                      onClick={() => handleRemove(pos.poolId)}
+                      className="ml-1 text-amber-400 hover:text-amber-200"
+                      title="Remove position"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Auto-fetch progress banner */}
       {autoFetchProgress && (
         <div className="bg-purple-900/50 text-purple-200 px-4 py-2 rounded-lg text-sm flex items-center gap-2">
