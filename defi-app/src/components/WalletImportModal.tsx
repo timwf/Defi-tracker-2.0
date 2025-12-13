@@ -15,7 +15,8 @@ export function WalletImportModal({ isOpen, onClose, onImportComplete }: WalletI
   const [walletAddress, setWalletAddress] = useState('');
   const [selectedChains, setSelectedChains] = useState<string[]>(SUPPORTED_CHAINS);
   const [scanStatus, setScanStatus] = useState<ScanStatus>('idle');
-  const [chainStatuses, setChainStatuses] = useState<Record<string, 'pending' | 'scanning' | 'done' | 'error'>>({});
+  const [chainStatuses, setChainStatuses] = useState<Record<string, 'pending' | 'scanning' | 'done' | 'error' | 'fetching_prices'>>({});
+  const [isFetchingPrices, setIsFetchingPrices] = useState(false);
   const [scannedTokens, setScannedTokens] = useState<ScannedToken[]>([]);
   const [selectedTokens, setSelectedTokens] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export function WalletImportModal({ isOpen, onClose, onImportComplete }: WalletI
     setSelectedTokens(new Set());
     setError(null);
     setIsImporting(false);
+    setIsFetchingPrices(false);
 
     return () => {
       document.removeEventListener('keydown', handleEscape);
@@ -83,7 +85,11 @@ export function WalletImportModal({ isOpen, onClose, onImportComplete }: WalletI
 
     try {
       const tokens = await scanWalletTokens(walletAddress, selectedChains, (chain, status) => {
-        setChainStatuses((prev) => ({ ...prev, [chain]: status }));
+        if (status === 'fetching_prices') {
+          setIsFetchingPrices(true);
+        } else {
+          setChainStatuses((prev) => ({ ...prev, [chain]: status }));
+        }
       });
 
       setScannedTokens(tokens);
@@ -239,7 +245,7 @@ export function WalletImportModal({ isOpen, onClose, onImportComplete }: WalletI
               {scanStatus === 'scanning' ? (
                 <>
                   <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Scanning...
+                  {isFetchingPrices ? 'Fetching prices...' : 'Scanning...'}
                 </>
               ) : (
                 'Scan Wallet'
@@ -310,8 +316,8 @@ export function WalletImportModal({ isOpen, onClose, onImportComplete }: WalletI
                           {formatBalance(token.balanceFormatted)}
                         </div>
                         {token.usdValue !== null && (
-                          <div className="text-xs text-slate-400">
-                            ${token.usdValue.toLocaleString()}
+                          <div className="text-xs text-green-400">
+                            ${token.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
                         )}
                       </div>

@@ -137,8 +137,8 @@ export function UnmappedPositionsList({
                         {formatBalance(position.balanceFormatted)} {position.tokenSymbol || ''}
                       </div>
                       {position.usdValue !== null && (
-                        <div className="text-xs text-slate-400">
-                          ~${position.usdValue.toLocaleString()}
+                        <div className="text-xs text-green-400">
+                          ~${position.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       )}
                     </div>

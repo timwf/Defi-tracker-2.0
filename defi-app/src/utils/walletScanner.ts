@@ -1,12 +1,12 @@
 import type { ScannedToken } from '../types/pool';
 
 // Chain configurations for Alchemy API
-const CHAIN_CONFIG: Record<string, { alchemyNetwork: string; nativeSymbol: string; nativeName: string }> = {
-  Ethereum: { alchemyNetwork: 'eth-mainnet', nativeSymbol: 'ETH', nativeName: 'Ethereum' },
-  Arbitrum: { alchemyNetwork: 'arb-mainnet', nativeSymbol: 'ETH', nativeName: 'Ethereum' },
-  Polygon: { alchemyNetwork: 'polygon-mainnet', nativeSymbol: 'MATIC', nativeName: 'Polygon' },
-  Optimism: { alchemyNetwork: 'opt-mainnet', nativeSymbol: 'ETH', nativeName: 'Ethereum' },
-  Base: { alchemyNetwork: 'base-mainnet', nativeSymbol: 'ETH', nativeName: 'Ethereum' },
+const CHAIN_CONFIG: Record<string, { alchemyNetwork: string; nativeSymbol: string; nativeName: string; coingeckoId: string }> = {
+  Ethereum: { alchemyNetwork: 'eth-mainnet', nativeSymbol: 'ETH', nativeName: 'Ethereum', coingeckoId: 'ethereum' },
+  Arbitrum: { alchemyNetwork: 'arb-mainnet', nativeSymbol: 'ETH', nativeName: 'Ethereum', coingeckoId: 'ethereum' },
+  Polygon: { alchemyNetwork: 'polygon-mainnet', nativeSymbol: 'MATIC', nativeName: 'Polygon', coingeckoId: 'matic-network' },
+  Optimism: { alchemyNetwork: 'opt-mainnet', nativeSymbol: 'ETH', nativeName: 'Ethereum', coingeckoId: 'ethereum' },
+  Base: { alchemyNetwork: 'base-mainnet', nativeSymbol: 'ETH', nativeName: 'Ethereum', coingeckoId: 'ethereum' },
 };
 
 export const SUPPORTED_CHAINS = Object.keys(CHAIN_CONFIG);
@@ -22,6 +22,19 @@ interface AlchemyTokenMetadata {
   decimals: number | null;
   logo: string | null;
 }
+
+// Price cache
+const priceCache: Map<string, { price: number; timestamp: number }> = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// DeFiLlama chain name mapping (for their price API)
+const DEFILLAMA_CHAINS: Record<string, string> = {
+  'Ethereum': 'ethereum',
+  'Arbitrum': 'arbitrum',
+  'Polygon': 'polygon',
+  'Optimism': 'optimism',
+  'Base': 'base',
+};
 
 function getAlchemyUrl(chain: string): string {
   const config = CHAIN_CONFIG[chain];
@@ -106,6 +119,107 @@ function hexToDecimal(hex: string): bigint {
   return BigInt(hex);
 }
 
+// Fetch token prices using DeFiLlama API (CORS-friendly, no rate limits)
+async function fetchTokenPrices(
+  tokens: { chain: string; tokenAddress: string }[]
+): Promise<Map<string, number>> {
+  const priceMap = new Map<string, number>();
+
+  // Check cache first
+  const tokensToFetch: { chain: string; tokenAddress: string }[] = [];
+  for (const token of tokens) {
+    const cacheKey = `${token.chain}:${token.tokenAddress.toLowerCase()}`;
+    const cached = priceCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      priceMap.set(cacheKey, cached.price);
+    } else {
+      tokensToFetch.push(token);
+    }
+  }
+
+  if (tokensToFetch.length === 0) return priceMap;
+
+  // Build DeFiLlama coins parameter: "chain:address,chain:address,..."
+  const coins = tokensToFetch
+    .map(t => {
+      const llamaChain = DEFILLAMA_CHAINS[t.chain];
+      return llamaChain ? `${llamaChain}:${t.tokenAddress.toLowerCase()}` : null;
+    })
+    .filter(Boolean)
+    .join(',');
+
+  if (!coins) return priceMap;
+
+  try {
+    const response = await fetch(
+      `https://coins.llama.fi/prices/current/${coins}`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      const coinPrices = data.coins || {};
+
+      for (const token of tokensToFetch) {
+        const llamaChain = DEFILLAMA_CHAINS[token.chain];
+        if (!llamaChain) continue;
+
+        const key = `${llamaChain}:${token.tokenAddress.toLowerCase()}`;
+        const priceData = coinPrices[key];
+        if (priceData?.price) {
+          const mapKey = `${token.chain}:${token.tokenAddress.toLowerCase()}`;
+          priceMap.set(mapKey, priceData.price);
+          priceCache.set(mapKey, { price: priceData.price, timestamp: Date.now() });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to fetch prices from DeFiLlama:', err);
+  }
+
+  return priceMap;
+}
+
+// Fetch native token price using DeFiLlama
+async function fetchNativePrice(chain: string): Promise<number | null> {
+  const config = CHAIN_CONFIG[chain];
+  if (!config) return null;
+
+  const cacheKey = `native:${chain}`;
+  const cached = priceCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.price;
+  }
+
+  // Use coingecko ID mapping for native tokens
+  const nativeCoins: Record<string, string> = {
+    'ethereum': 'coingecko:ethereum',
+    'matic-network': 'coingecko:matic-network',
+  };
+
+  const coin = nativeCoins[config.coingeckoId] || `coingecko:${config.coingeckoId}`;
+
+  try {
+    const response = await fetch(
+      `https://coins.llama.fi/prices/current/${coin}`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      const price = data.coins?.[coin]?.price;
+      if (typeof price === 'number') {
+        priceCache.set(cacheKey, { price, timestamp: Date.now() });
+        return price;
+      }
+    }
+  } catch (err) {
+    console.warn(`Failed to fetch native price for ${chain}:`, err);
+  }
+
+  return null;
+}
+
 function formatBalance(balanceRaw: bigint, decimals: number): number {
   if (decimals === 0) return Number(balanceRaw);
   const divisor = BigInt(10 ** decimals);
@@ -117,7 +231,7 @@ function formatBalance(balanceRaw: bigint, decimals: number): number {
 export async function scanWalletTokens(
   walletAddress: string,
   chains: string[],
-  onProgress?: (chain: string, status: 'scanning' | 'done' | 'error') => void
+  onProgress?: (chain: string, status: 'scanning' | 'done' | 'error' | 'fetching_prices') => void
 ): Promise<ScannedToken[]> {
   const allTokens: ScannedToken[] = [];
 
@@ -133,15 +247,18 @@ export async function scanWalletTokens(
 
       if (nativeBalanceRaw > BigInt(0)) {
         const config = CHAIN_CONFIG[chain];
+        const nativeBalance = formatBalance(nativeBalanceRaw, 18);
+        const nativePrice = await fetchNativePrice(chain);
+
         allTokens.push({
           chain,
           tokenAddress: '0x0000000000000000000000000000000000000000', // Native token address
           tokenSymbol: config.nativeSymbol,
           tokenName: config.nativeName,
           balanceRaw: nativeBalanceRaw.toString(),
-          balanceFormatted: formatBalance(nativeBalanceRaw, 18),
+          balanceFormatted: nativeBalance,
           decimals: 18,
-          usdValue: null, // Could fetch from CoinGecko if needed
+          usdValue: nativePrice ? nativeBalance * nativePrice : null,
         });
       }
 
@@ -161,6 +278,9 @@ export async function scanWalletTokens(
           const balanceRaw = hexToDecimal(token.tokenBalance);
           const decimals = metadata.decimals ?? 18;
 
+          // Debug log for token addresses
+          console.log(`Token: ${metadata.symbol} (${metadata.name}) - Address: ${token.contractAddress.toLowerCase()}`);
+
           allTokens.push({
             chain,
             tokenAddress: token.contractAddress.toLowerCase(),
@@ -169,7 +289,7 @@ export async function scanWalletTokens(
             balanceRaw: balanceRaw.toString(),
             balanceFormatted: formatBalance(balanceRaw, decimals),
             decimals,
-            usdValue: null,
+            usdValue: null, // Will be filled in below
           });
         } catch (err) {
           console.warn(`Failed to get metadata for ${token.contractAddress}:`, err);
@@ -183,7 +303,28 @@ export async function scanWalletTokens(
     }
   }
 
-  // Sort by balance (estimated value - tokens without USD value go to end)
+  // Fetch USD prices for all ERC-20 tokens
+  const erc20Tokens = allTokens.filter(t => t.tokenAddress !== '0x0000000000000000000000000000000000000000');
+  if (erc20Tokens.length > 0) {
+    onProgress?.('prices', 'fetching_prices');
+
+    const priceMap = await fetchTokenPrices(
+      erc20Tokens.map(t => ({ chain: t.chain, tokenAddress: t.tokenAddress }))
+    );
+
+    // Apply prices to tokens
+    for (const token of allTokens) {
+      if (token.tokenAddress === '0x0000000000000000000000000000000000000000') continue;
+
+      const key = `${token.chain}:${token.tokenAddress.toLowerCase()}`;
+      const price = priceMap.get(key);
+      if (price) {
+        token.usdValue = token.balanceFormatted * price;
+      }
+    }
+  }
+
+  // Sort by USD value (tokens without USD value go to end)
   return allTokens.sort((a, b) => {
     if (a.usdValue !== null && b.usdValue !== null) {
       return b.usdValue - a.usdValue;
