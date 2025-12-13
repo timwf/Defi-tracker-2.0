@@ -481,7 +481,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
           <UnmappedPositionsList
             unmappedPositions={unmappedPositions}
             pools={pools}
-            heldPoolIds={heldPoolIds}
             onPositionLinked={() => {
               loadUnmappedPositions();
               if (onRefreshPositions) onRefreshPositions();

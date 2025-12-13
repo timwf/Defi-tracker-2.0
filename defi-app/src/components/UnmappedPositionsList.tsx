@@ -6,7 +6,6 @@ import { linkUnmappedToPool, deleteUnmappedPosition } from '../utils/unmappedPos
 interface UnmappedPositionsListProps {
   unmappedPositions: UnmappedPosition[];
   pools: Pool[];
-  heldPoolIds: string[];
   onPositionLinked: () => void;
   onPositionDeleted: () => void;
 }
@@ -14,7 +13,6 @@ interface UnmappedPositionsListProps {
 export function UnmappedPositionsList({
   unmappedPositions,
   pools,
-  heldPoolIds,
   onPositionLinked,
   onPositionDeleted,
 }: UnmappedPositionsListProps) {
