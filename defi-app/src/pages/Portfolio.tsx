@@ -6,6 +6,7 @@ import { formatTvl } from '../utils/filterPools';
 import { MetricInfo } from '../components/MetricInfo';
 import { PoolSearchInput } from '../components/PoolSearchInput';
 import { PoolInfoCard } from '../components/PoolInfoCard';
+import { PriceWatchlist } from '../components/PriceWatchlist';
 
 interface PortfolioProps {
   positions: HeldPosition[];
@@ -705,6 +706,9 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
         {/* Right Column: Charts & Risk */}
         <div className="space-y-4">
+          {/* Price Watchlist */}
+          <PriceWatchlist />
+
           {/* Allocation Chart */}
           <div className="bg-slate-800 rounded-lg p-4">
             <h3 className="text-md font-medium text-white mb-4">Allocation by Pool</h3>
