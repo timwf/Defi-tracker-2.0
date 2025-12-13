@@ -174,7 +174,7 @@ export async function updatePositionInDb(
   if (updates.amountUsd !== undefined) updateData.amount_usd = updates.amountUsd;
   if (updates.entryDate !== undefined) updateData.entry_date = updates.entryDate || null;
   if (updates.notes !== undefined) updateData.notes = updates.notes || null;
-  if (updates.fixedApy !== undefined) updateData.fixed_apy = updates.fixedApy || null;
+  if ('fixedApy' in updates) updateData.fixed_apy = updates.fixedApy ?? null;
 
   const { error } = await supabase
     .from('positions')

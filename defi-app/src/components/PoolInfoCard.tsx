@@ -191,15 +191,13 @@ export function PoolInfoCard({
                   Your locked rate
                 </div>
                 <div className="flex items-baseline gap-2 mt-2">
-                  <span className="text-lg text-slate-400">{formatApy(pool.apy)}</span>
+                  <span className="text-lg text-green-400">{formatApy(pool.apy)}</span>
                   {apyChange !== null && (
                     <span className={`text-xs ${apyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {apyChange >= 0 ? '↑' : '↓'} {Math.abs(apyChange).toFixed(2)}
                     </span>
                   )}
-                </div>
-                <div className="text-xs text-slate-500">
-                  Current market rate
+                  <span className="text-xs text-slate-500">actual</span>
                 </div>
               </>
             ) : (

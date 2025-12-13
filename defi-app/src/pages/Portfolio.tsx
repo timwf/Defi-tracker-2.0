@@ -310,14 +310,15 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     const amount = parseFloat(editAmount);
     if (isNaN(amount) || amount <= 0) return;
 
-    const fixedApyValue = editFixedApy ? parseFloat(editFixedApy) : undefined;
+    // If empty string, explicitly set to undefined to clear the fixed APY
+    const fixedApyValue = editFixedApy.trim() === '' ? null : parseFloat(editFixedApy);
 
     setSaving(true);
     try {
       await updatePositionInDb(editingId, {
         amountUsd: amount,
         notes: editNotes || undefined,
-        fixedApy: fixedApyValue,
+        fixedApy: fixedApyValue === null ? undefined : (isNaN(fixedApyValue) ? undefined : fixedApyValue),
       });
       if (onRefreshPositions) {
         await onRefreshPositions();
