@@ -181,14 +181,27 @@ export function PoolInfoCard({
               </div>
             )}
           </div>
-          <a
-            href={`https://defillama.com/yields/pool/${pool.pool}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-400 hover:text-blue-300 hover:underline whitespace-nowrap"
-          >
-            DefiLlama →
-          </a>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(pool.pool);
+              }}
+              className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+              title={`Copy Pool ID: ${pool.pool}`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </button>
+            <a
+              href={`https://defillama.com/yields/pool/${pool.pool}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-400 hover:text-blue-300 hover:underline whitespace-nowrap"
+            >
+              DefiLlama →
+            </a>
+          </div>
         </div>
       </div>
 

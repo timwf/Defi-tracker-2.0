@@ -20,8 +20,24 @@ export function PoolSearchInput({ pools, onSelect, selectedPool, onClear, exclud
   const filteredPools = useMemo(() => {
     if (!query.trim()) return [];
 
+    const queryLower = query.toLowerCase().trim();
+
+    // Check for exact pool ID match first (UUID format)
+    const exactMatch = pools.find(pool =>
+      pool.pool.toLowerCase() === queryLower && !excludePoolIds.includes(pool.pool)
+    );
+    if (exactMatch) return [exactMatch];
+
+    // Also check for partial pool ID match (in case of copy/paste issues)
+    if (queryLower.length > 8 && queryLower.includes('-')) {
+      const partialIdMatches = pools.filter(pool =>
+        pool.pool.toLowerCase().includes(queryLower) && !excludePoolIds.includes(pool.pool)
+      );
+      if (partialIdMatches.length > 0) return partialIdMatches.slice(0, 15);
+    }
+
     // Split query into individual terms
-    const terms = query.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
+    const terms = queryLower.split(/\s+/).filter(t => t.length > 0);
     if (terms.length === 0) return [];
 
     return pools

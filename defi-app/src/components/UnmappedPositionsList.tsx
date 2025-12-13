@@ -186,7 +186,7 @@ export function UnmappedPositionsList({
                         onSelect={setSelectedPool}
                         selectedPool={selectedPool}
                         onClear={() => setSelectedPool(null)}
-                        excludePoolIds={heldPoolIds}
+                        excludePoolIds={[]}
                       />
                       <p className="text-xs text-slate-500 mt-1">
                         Search for the pool where this token is deposited
