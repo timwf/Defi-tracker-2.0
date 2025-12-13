@@ -114,11 +114,12 @@ export function PoolInfoCard({
   const rewardPct = pool.apy > 0 && pool.apyReward ? (pool.apyReward / pool.apy) * 100 : 0;
   const basePct = 100 - rewardPct;
 
-  // Portfolio calculations
+  // Portfolio calculations - use fixedApy if set
+  const effectiveApy = position?.fixedApy ?? pool.apy;
   const allocation = position && totalPortfolioValue > 0
     ? (position.amountUsd / totalPortfolioValue) * 100
     : 0;
-  const annualEarning = position ? position.amountUsd * (pool.apy / 100) : 0;
+  const annualEarning = position ? position.amountUsd * (effectiveApy / 100) : 0;
   const monthlyEarning = annualEarning / 12;
   const dailyEarning = annualEarning / 365;
 
@@ -179,17 +180,43 @@ export function PoolInfoCard({
         <div className="flex items-start justify-between gap-4">
           {/* Current APY */}
           <div className="flex-1">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-green-400">{formatApy(pool.apy)}</span>
-              {apyChange !== null && (
-                <span className={`text-sm font-medium ${apyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {apyChange >= 0 ? '↑' : '↓'} {Math.abs(apyChange).toFixed(2)}
-                </span>
-              )}
-            </div>
-            <div className="text-xs text-slate-500 mt-1">
-              Current APY {apyChange !== null && <span className="text-slate-600">vs yesterday</span>}
-            </div>
+            {/* Show Fixed APY prominently if set */}
+            {position?.fixedApy !== undefined ? (
+              <>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-purple-400">{formatApy(position.fixedApy)}</span>
+                  <span className="text-xs bg-purple-900/50 text-purple-300 px-2 py-0.5 rounded">FIXED</span>
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  Your locked rate
+                </div>
+                <div className="flex items-baseline gap-2 mt-2">
+                  <span className="text-lg text-slate-400">{formatApy(pool.apy)}</span>
+                  {apyChange !== null && (
+                    <span className={`text-xs ${apyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {apyChange >= 0 ? '↑' : '↓'} {Math.abs(apyChange).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-500">
+                  Current market rate
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-green-400">{formatApy(pool.apy)}</span>
+                  {apyChange !== null && (
+                    <span className={`text-sm font-medium ${apyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {apyChange >= 0 ? '↑' : '↓'} {Math.abs(apyChange).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  Current APY {apyChange !== null && <span className="text-slate-600">vs yesterday</span>}
+                </div>
+              </>
+            )}
             {apyHistory.length >= 2 && (
               <div className="mt-2">
                 <Sparkline data={apyHistory} width={120} height={28} />

@@ -31,6 +31,7 @@ function addLocalPosition(params: {
   amountUsd: number;
   entryDate?: string;
   notes?: string;
+  fixedApy?: number;
 }): HeldPosition {
   const positions = getLocalPositions();
   const newPosition: HeldPosition = {
@@ -39,6 +40,7 @@ function addLocalPosition(params: {
     addedAt: Date.now(),
     entryDate: params.entryDate,
     notes: params.notes,
+    fixedApy: params.fixedApy,
   };
   positions.unshift(newPosition);
   saveLocalPositions(positions);
@@ -90,6 +92,7 @@ export async function fetchPositions(): Promise<HeldPosition[]> {
     addedAt: new Date(row.added_at).getTime(),
     entryDate: row.entry_date || undefined,
     notes: row.notes || undefined,
+    fixedApy: row.fixed_apy ?? undefined,
   }));
 }
 
@@ -98,6 +101,7 @@ export async function addPositionToDb(params: {
   amountUsd: number;
   entryDate?: string;
   notes?: string;
+  fixedApy?: number;
 }): Promise<HeldPosition | null> {
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -114,6 +118,7 @@ export async function addPositionToDb(params: {
       amount_usd: params.amountUsd,
       entry_date: params.entryDate || null,
       notes: params.notes || null,
+      fixed_apy: params.fixedApy ?? null,
     })
     .select()
     .single();
@@ -129,6 +134,7 @@ export async function addPositionToDb(params: {
     addedAt: new Date(data.added_at).getTime(),
     entryDate: data.entry_date || undefined,
     notes: data.notes || undefined,
+    fixedApy: data.fixed_apy ?? undefined,
   };
 }
 
@@ -168,6 +174,7 @@ export async function updatePositionInDb(
   if (updates.amountUsd !== undefined) updateData.amount_usd = updates.amountUsd;
   if (updates.entryDate !== undefined) updateData.entry_date = updates.entryDate || null;
   if (updates.notes !== undefined) updateData.notes = updates.notes || null;
+  if (updates.fixedApy !== undefined) updateData.fixed_apy = updates.fixedApy || null;
 
   const { error } = await supabase
     .from('positions')
@@ -199,6 +206,7 @@ export async function migrateLocalToSupabase(): Promise<number> {
         amount_usd: pos.amountUsd,
         entry_date: pos.entryDate || null,
         notes: pos.notes || null,
+        fixed_apy: pos.fixedApy ?? null,
         added_at: new Date(pos.addedAt).toISOString(),
       }, {
         onConflict: 'user_id,pool_id',

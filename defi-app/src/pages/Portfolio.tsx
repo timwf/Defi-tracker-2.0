@@ -37,6 +37,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [editFixedApy, setEditFixedApy] = useState('');
   const [saving, setSaving] = useState(false);
   const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
   const [autoFetchProgress, setAutoFetchProgress] = useState<{ current: number; total: number } | null>(null);
@@ -135,7 +136,9 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const weightedApy = useMemo(() => {
     if (totalValue === 0) return 0;
     return positionsWithPools.reduce((sum, { position, pool }) => {
-      return sum + (pool.apy * position.amountUsd / totalValue);
+      // Use fixedApy if set, otherwise use pool's current APY
+      const effectiveApy = position.fixedApy ?? pool.apy;
+      return sum + (effectiveApy * position.amountUsd / totalValue);
     }, 0);
   }, [positionsWithPools, totalValue]);
 
@@ -299,6 +302,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     setEditingId(position.poolId);
     setEditAmount(position.amountUsd.toString());
     setEditNotes(position.notes || '');
+    setEditFixedApy(position.fixedApy?.toString() || '');
   };
 
   const handleSaveEdit = async () => {
@@ -306,11 +310,14 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     const amount = parseFloat(editAmount);
     if (isNaN(amount) || amount <= 0) return;
 
+    const fixedApyValue = editFixedApy ? parseFloat(editFixedApy) : undefined;
+
     setSaving(true);
     try {
       await updatePositionInDb(editingId, {
         amountUsd: amount,
         notes: editNotes || undefined,
+        fixedApy: fixedApyValue,
       });
       if (onRefreshPositions) {
         await onRefreshPositions();
@@ -492,11 +499,20 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                           {formatCurrency(position.amountUsd)}
                         </td>
                         <td className="text-right py-2 px-3">
-                          <span className="text-green-400">{pool.apy.toFixed(1)}%</span>
-                          {apyChange !== null && (
-                            <span className={`ml-1 ${apyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {apyChange >= 0 ? '▲' : '▼'}
-                            </span>
+                          {position.fixedApy !== undefined ? (
+                            <>
+                              <span className="text-purple-400">{position.fixedApy.toFixed(1)}%</span>
+                              <span className="text-slate-500 ml-1 text-xs">F</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-green-400">{pool.apy.toFixed(1)}%</span>
+                              {apyChange !== null && (
+                                <span className={`ml-1 ${apyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {apyChange >= 0 ? '▲' : '▼'}
+                                </span>
+                              )}
+                            </>
                           )}
                         </td>
                         <td className="text-right py-2 px-3">
@@ -548,7 +564,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                           <span className="text-white font-medium">{pool.symbol}</span>
                           <span className="text-slate-400 text-sm">{pool.project} · {pool.chain}</span>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div>
                             <label className="text-xs text-slate-400">Amount (USD)</label>
                             <input
@@ -556,6 +572,17 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                               value={editAmount}
                               onChange={(e) => setEditAmount(e.target.value)}
                               className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-slate-400">Fixed APY %</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editFixedApy}
+                              onChange={(e) => setEditFixedApy(e.target.value)}
+                              placeholder={pool.apy.toFixed(2)}
+                              className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm placeholder-slate-500"
                             />
                           </div>
                           <div>
@@ -568,6 +595,11 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                             />
                           </div>
                         </div>
+                        {editFixedApy && (
+                          <div className="text-xs text-purple-400 mt-2">
+                            Fixed APY will be used for portfolio calculations instead of the live rate ({pool.apy.toFixed(2)}%)
+                          </div>
+                        )}
                         <div className="flex gap-2 mt-4">
                           <button
                             onClick={handleSaveEdit}

@@ -98,4 +98,5 @@ export interface HeldPosition {
   addedAt: number;
   entryDate?: string; // ISO date string
   notes?: string;
+  fixedApy?: number; // Fixed APY override (e.g., for Pendle fixed rates)
 }
