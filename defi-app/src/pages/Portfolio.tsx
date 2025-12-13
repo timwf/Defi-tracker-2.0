@@ -3,6 +3,7 @@ import type { Pool, HeldPosition, CalculatedMetrics, UnmappedPosition } from '..
 import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../utils/heldPositions';
 import { getCachedData, getPoolMetrics, fetchPoolHistoryWithCache, isCacheValid } from '../utils/historicalData';
 import { fetchUnmappedPositions } from '../utils/unmappedPositions';
+import { refreshTokenBalance } from '../utils/walletScanner';
 import { formatTvl } from '../utils/filterPools';
 import { MetricInfo } from '../components/MetricInfo';
 import { PoolSearchInput } from '../components/PoolSearchInput';
@@ -44,6 +45,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [editFixedApy, setEditFixedApy] = useState('');
   const [saving, setSaving] = useState(false);
   const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
+  const [refreshingPoolId, setRefreshingPoolId] = useState<string | null>(null);
   const [autoFetchProgress, setAutoFetchProgress] = useState<{ current: number; total: number } | null>(null);
   const hasAutoFetched = useRef(false);
 
@@ -368,6 +370,47 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     }
   };
 
+  const handleRefreshWalletPosition = async (poolId: string) => {
+    const position = positions.find(p => p.poolId === poolId);
+    if (!position?.walletAddress || !position?.tokenAddress) {
+      console.error('Cannot refresh: missing wallet or token address');
+      return;
+    }
+
+    // Find the pool to get the chain
+    const pool = pools.find(p => p.pool === poolId);
+    if (!pool) {
+      console.error('Cannot refresh: pool not found');
+      return;
+    }
+
+    setRefreshingPoolId(poolId);
+    try {
+      const result = await refreshTokenBalance(
+        position.walletAddress,
+        position.tokenAddress,
+        pool.chain
+      );
+
+      if (result) {
+        // Update the position with new balance and USD value
+        await updatePositionInDb(poolId, {
+          tokenBalance: result.balance,
+          tokenSymbol: result.symbol || position.tokenSymbol,
+          amountUsd: result.usdValue ?? position.amountUsd,
+        });
+
+        if (onRefreshPositions) {
+          await onRefreshPositions();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to refresh wallet position:', err);
+    } finally {
+      setRefreshingPoolId(null);
+    }
+  };
+
   const formatCurrency = (value: number) => {
     if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
     if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
@@ -668,6 +711,8 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                         onRemove={handleRemove}
                         onFetchHistory={handleFetchHistory}
                         isFetching={fetchingPoolId === position.poolId}
+                        onRefreshWalletPosition={handleRefreshWalletPosition}
+                        isRefreshing={refreshingPoolId === position.poolId}
                       />
                     )}
                   </div>

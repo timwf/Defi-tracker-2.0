@@ -32,6 +32,11 @@ function addLocalPosition(params: {
   entryDate?: string;
   notes?: string;
   fixedApy?: number;
+  source?: 'manual' | 'wallet';
+  walletAddress?: string;
+  tokenAddress?: string;
+  tokenBalance?: number;
+  tokenSymbol?: string | null;
 }): HeldPosition {
   const positions = getLocalPositions();
   const newPosition: HeldPosition = {
@@ -41,6 +46,11 @@ function addLocalPosition(params: {
     entryDate: params.entryDate,
     notes: params.notes,
     fixedApy: params.fixedApy,
+    source: params.source,
+    walletAddress: params.walletAddress,
+    tokenAddress: params.tokenAddress,
+    tokenBalance: params.tokenBalance,
+    tokenSymbol: params.tokenSymbol || undefined,
   };
   positions.unshift(newPosition);
   saveLocalPositions(positions);
@@ -96,6 +106,8 @@ export async function fetchPositions(): Promise<HeldPosition[]> {
     source: row.source || 'manual',
     walletAddress: row.wallet_address || undefined,
     tokenAddress: row.token_address || undefined,
+    tokenBalance: row.token_balance ? Number(row.token_balance) : undefined,
+    tokenSymbol: row.token_symbol || undefined,
   }));
 }
 
@@ -108,6 +120,8 @@ export async function addPositionToDb(params: {
   source?: 'manual' | 'wallet';
   walletAddress?: string;
   tokenAddress?: string;
+  tokenBalance?: number;
+  tokenSymbol?: string | null;
 }): Promise<HeldPosition | null> {
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -128,6 +142,8 @@ export async function addPositionToDb(params: {
       source: params.source || 'manual',
       wallet_address: params.walletAddress || null,
       token_address: params.tokenAddress || null,
+      token_balance: params.tokenBalance ?? null,
+      token_symbol: params.tokenSymbol || null,
     })
     .select()
     .single();
@@ -147,6 +163,8 @@ export async function addPositionToDb(params: {
     source: data.source || 'manual',
     walletAddress: data.wallet_address || undefined,
     tokenAddress: data.token_address || undefined,
+    tokenBalance: data.token_balance ? Number(data.token_balance) : undefined,
+    tokenSymbol: data.token_symbol || undefined,
   };
 }
 

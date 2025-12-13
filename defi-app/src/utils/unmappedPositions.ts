@@ -163,6 +163,8 @@ export async function linkUnmappedToPool(
       source: 'wallet' as const,
       walletAddress: position.walletAddress,
       tokenAddress: position.tokenAddress,
+      tokenBalance: position.balanceFormatted,
+      tokenSymbol: position.tokenSymbol,
     };
 
     // Add to held positions (localStorage)
@@ -199,6 +201,8 @@ export async function linkUnmappedToPool(
     source: 'wallet',
     walletAddress: unmapped.wallet_address,
     tokenAddress: unmapped.token_address,
+    tokenBalance: unmapped.balance_formatted,
+    tokenSymbol: unmapped.token_symbol,
   });
 
   if (!result) {

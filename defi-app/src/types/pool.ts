@@ -102,6 +102,8 @@ export interface HeldPosition {
   source?: 'manual' | 'wallet'; // How position was added
   walletAddress?: string; // For wallet-imported positions
   tokenAddress?: string; // Token contract address for wallet imports
+  tokenBalance?: number; // Raw token quantity (for wallet imports)
+  tokenSymbol?: string; // Token symbol (for wallet imports)
 }
 
 // Scanned token from wallet

@@ -338,3 +338,57 @@ export async function scanWalletTokens(
 export function isValidEthAddress(address: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(address);
 }
+
+// Refresh a single token's balance and price
+export async function refreshTokenBalance(
+  walletAddress: string,
+  tokenAddress: string,
+  chain: string
+): Promise<{ balance: number; symbol: string | null; usdValue: number | null } | null> {
+  if (!CHAIN_CONFIG[chain]) return null;
+
+  try {
+    // Get token balance
+    const url = getAlchemyUrl(chain);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'alchemy_getTokenBalances',
+        params: [walletAddress, [tokenAddress]],
+        id: 1,
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const tokenBalances = data.result?.tokenBalances || [];
+    const tokenData = tokenBalances[0];
+
+    if (!tokenData || !tokenData.tokenBalance) return null;
+
+    const balanceRaw = hexToDecimal(tokenData.tokenBalance);
+    if (balanceRaw === BigInt(0)) return null;
+
+    // Get token metadata
+    const metadata = await getTokenMetadata(tokenAddress, chain);
+    const decimals = metadata.decimals ?? 18;
+    const balance = formatBalance(balanceRaw, decimals);
+
+    // Get price from DeFiLlama
+    const priceMap = await fetchTokenPrices([{ chain, tokenAddress }]);
+    const priceKey = `${chain}:${tokenAddress.toLowerCase()}`;
+    const price = priceMap.get(priceKey);
+
+    return {
+      balance,
+      symbol: metadata.symbol,
+      usdValue: price ? balance * price : null,
+    };
+  } catch (err) {
+    console.error('Error refreshing token balance:', err);
+    return null;
+  }
+}

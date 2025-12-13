@@ -17,6 +17,8 @@ interface PoolInfoCardProps {
   totalPortfolioValue?: number;
   onEdit?: (position: HeldPosition) => void;
   onRemove?: (poolId: string) => void;
+  onRefreshWalletPosition?: (poolId: string) => Promise<void>;
+  isRefreshing?: boolean;
   alerts?: PositionAlert[];
 }
 
@@ -96,6 +98,8 @@ export function PoolInfoCard({
   totalPortfolioValue = 0,
   onEdit,
   onRemove,
+  onRefreshWalletPosition,
+  isRefreshing = false,
   alerts = [],
 }: PoolInfoCardProps) {
   const metrics: CalculatedMetrics | null = getPoolMetrics(pool.pool);
@@ -484,6 +488,11 @@ export function PoolInfoCard({
             <div>
               <div className="text-slate-400 text-xs">Amount</div>
               <div className="text-white font-semibold text-lg">{formatCurrency(position.amountUsd)}</div>
+              {position.tokenBalance && position.tokenSymbol && (
+                <div className="text-slate-400 text-xs">
+                  {position.tokenBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} {position.tokenSymbol}
+                </div>
+              )}
               <div className="text-slate-500 text-xs">{allocation.toFixed(1)}% of portfolio</div>
             </div>
             <div>
@@ -555,6 +564,20 @@ export function PoolInfoCard({
                 }`}
               >
                 {isFetching ? 'Fetching...' : hasHistoricalData ? `✓ ${dataPoints}d` : '↓ Fetch'}
+              </button>
+            )}
+            {onRefreshWalletPosition && position?.source === 'wallet' && (
+              <button
+                onClick={() => onRefreshWalletPosition(pool.pool)}
+                disabled={isRefreshing}
+                className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                  isRefreshing
+                    ? 'bg-purple-600 text-white animate-pulse'
+                    : 'bg-slate-700 text-slate-300 hover:bg-purple-600 hover:text-white'
+                }`}
+                title="Refresh wallet balance"
+              >
+                {isRefreshing ? '...' : '↻'}
               </button>
             )}
             {onEdit && position && (
