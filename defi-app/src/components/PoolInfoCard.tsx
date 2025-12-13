@@ -129,9 +129,18 @@ export function PoolInfoCard({
   if (pool.exposure === 'multi') badges.push('Multi-asset');
   if (pool.ilRisk === 'yes') badges.push('IL Risk');
 
+  const isWalletPosition = position?.source === 'wallet';
+  const truncatedWallet = position?.walletAddress
+    ? `${position.walletAddress.slice(0, 6)}...${position.walletAddress.slice(-4)}`
+    : null;
+
   return (
     <div className={`bg-slate-800 rounded-lg overflow-hidden ${
-      mode === 'portfolio' ? 'ring-2 ring-yellow-500/50' : ''
+      mode === 'portfolio'
+        ? isWalletPosition
+          ? 'ring-2 ring-purple-500/50'
+          : 'ring-2 ring-yellow-500/50'
+        : ''
     } ${alerts.some(a => a.type === 'danger') ? 'ring-2 ring-red-500/50' : ''}`}>
 
       {/* HEADER */}
@@ -139,7 +148,15 @@ export function PoolInfoCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              {mode === 'portfolio' && <span className="text-yellow-400 text-lg">★</span>}
+              {mode === 'portfolio' && (
+                isWalletPosition ? (
+                  <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                ) : (
+                  <span className="text-yellow-400 text-lg">★</span>
+                )
+              )}
               <span className="text-white font-semibold text-lg truncate">{pool.symbol}</span>
             </div>
             <div className="text-sm text-slate-400 mt-0.5">
@@ -419,8 +436,20 @@ export function PoolInfoCard({
 
       {/* PORTFOLIO SECTION (only in portfolio mode) */}
       {mode === 'portfolio' && position && (
-        <div className="p-4 border-b border-slate-700 bg-yellow-900/10">
-          <div className="text-xs text-yellow-500 font-medium uppercase tracking-wide mb-3">Your Position</div>
+        <div className={`p-4 border-b border-slate-700 ${isWalletPosition ? 'bg-purple-900/10' : 'bg-yellow-900/10'}`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className={`text-xs font-medium uppercase tracking-wide ${isWalletPosition ? 'text-purple-400' : 'text-yellow-500'}`}>
+              Your Position
+            </div>
+            {isWalletPosition && truncatedWallet && (
+              <div className="flex items-center gap-1.5 text-xs text-purple-400 bg-purple-900/30 px-2 py-0.5 rounded">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+                {truncatedWallet}
+              </div>
+            )}
+          </div>
 
           {/* Alerts */}
           {alerts.length > 0 && (

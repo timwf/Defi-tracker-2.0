@@ -99,4 +99,35 @@ export interface HeldPosition {
   entryDate?: string; // ISO date string
   notes?: string;
   fixedApy?: number; // Fixed APY override (e.g., for Pendle fixed rates)
+  source?: 'manual' | 'wallet'; // How position was added
+  walletAddress?: string; // For wallet-imported positions
+  tokenAddress?: string; // Token contract address for wallet imports
+}
+
+// Scanned token from wallet
+export interface ScannedToken {
+  chain: string;
+  tokenAddress: string;
+  tokenSymbol: string | null;
+  tokenName: string | null;
+  balanceRaw: string; // Store as string to avoid precision loss
+  balanceFormatted: number;
+  decimals: number;
+  usdValue: number | null;
+}
+
+// Unmapped position (wallet token not yet linked to a pool)
+export interface UnmappedPosition {
+  id: string;
+  walletAddress: string;
+  chain: string;
+  tokenAddress: string;
+  tokenSymbol: string | null;
+  tokenName: string | null;
+  balanceRaw: string;
+  balanceFormatted: number;
+  usdValue: number | null;
+  linkedPoolId: string | null;
+  importedAt: number;
+  linkedAt: number | null;
 }

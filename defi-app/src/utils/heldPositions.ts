@@ -93,6 +93,9 @@ export async function fetchPositions(): Promise<HeldPosition[]> {
     entryDate: row.entry_date || undefined,
     notes: row.notes || undefined,
     fixedApy: row.fixed_apy ?? undefined,
+    source: row.source || 'manual',
+    walletAddress: row.wallet_address || undefined,
+    tokenAddress: row.token_address || undefined,
   }));
 }
 
@@ -102,6 +105,9 @@ export async function addPositionToDb(params: {
   entryDate?: string;
   notes?: string;
   fixedApy?: number;
+  source?: 'manual' | 'wallet';
+  walletAddress?: string;
+  tokenAddress?: string;
 }): Promise<HeldPosition | null> {
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -119,6 +125,9 @@ export async function addPositionToDb(params: {
       entry_date: params.entryDate || null,
       notes: params.notes || null,
       fixed_apy: params.fixedApy ?? null,
+      source: params.source || 'manual',
+      wallet_address: params.walletAddress || null,
+      token_address: params.tokenAddress || null,
     })
     .select()
     .single();
@@ -135,6 +144,9 @@ export async function addPositionToDb(params: {
     entryDate: data.entry_date || undefined,
     notes: data.notes || undefined,
     fixedApy: data.fixed_apy ?? undefined,
+    source: data.source || 'manual',
+    walletAddress: data.wallet_address || undefined,
+    tokenAddress: data.token_address || undefined,
   };
 }
 

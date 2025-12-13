@@ -1,12 +1,15 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import type { Pool, HeldPosition, CalculatedMetrics } from '../types/pool';
+import type { Pool, HeldPosition, CalculatedMetrics, UnmappedPosition } from '../types/pool';
 import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../utils/heldPositions';
 import { getCachedData, getPoolMetrics, fetchPoolHistoryWithCache, isCacheValid } from '../utils/historicalData';
+import { fetchUnmappedPositions } from '../utils/unmappedPositions';
 import { formatTvl } from '../utils/filterPools';
 import { MetricInfo } from '../components/MetricInfo';
 import { PoolSearchInput } from '../components/PoolSearchInput';
 import { PoolInfoCard } from '../components/PoolInfoCard';
 import { PriceWatchlist } from '../components/PriceWatchlist';
+import { WalletImportModal } from '../components/WalletImportModal';
+import { UnmappedPositionsList } from '../components/UnmappedPositionsList';
 
 interface PortfolioProps {
   positions: HeldPosition[];
@@ -43,6 +46,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
   const [autoFetchProgress, setAutoFetchProgress] = useState<{ current: number; total: number } | null>(null);
   const hasAutoFetched = useRef(false);
+
+  // Wallet import state
+  const [showWalletImport, setShowWalletImport] = useState(false);
+  const [unmappedPositions, setUnmappedPositions] = useState<UnmappedPosition[]>([]);
 
   // Get list of pool IDs already in portfolio
   const heldPoolIds = useMemo(() => positions.map(p => p.poolId), [positions]);
@@ -162,6 +169,20 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const projectedAnnualEarnings = totalValue * (weightedApy / 100);
   const projectedMonthlyEarnings = projectedAnnualEarnings / 12;
   const projectedDailyEarnings = projectedAnnualEarnings / 365;
+
+  // Load unmapped positions on mount
+  useEffect(() => {
+    loadUnmappedPositions();
+  }, []);
+
+  const loadUnmappedPositions = async () => {
+    try {
+      const unmapped = await fetchUnmappedPositions();
+      setUnmappedPositions(unmapped);
+    } catch (err) {
+      console.error('Failed to load unmapped positions:', err);
+    }
+  };
 
   // Auto-fetch stale historical data on page load
   useEffect(() => {
@@ -456,6 +477,18 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Positions List */}
         <div className="lg:col-span-2 space-y-4">
+          {/* Unmapped Positions (from wallet import) */}
+          <UnmappedPositionsList
+            unmappedPositions={unmappedPositions}
+            pools={pools}
+            heldPoolIds={heldPoolIds}
+            onPositionLinked={() => {
+              loadUnmappedPositions();
+              if (onRefreshPositions) onRefreshPositions();
+            }}
+            onPositionDeleted={() => loadUnmappedPositions()}
+          />
+
           <h2 className="text-lg font-semibold text-white">Positions ({positionsWithPools.length})</h2>
 
           {/* Summary Table */}
@@ -569,12 +602,19 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div>
                             <label className="text-xs text-slate-400">Amount (USD)</label>
-                            <input
-                              type="number"
-                              value={editAmount}
-                              onChange={(e) => setEditAmount(e.target.value)}
-                              className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm"
-                            />
+                            {position.source === 'wallet' ? (
+                              <div className="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-400 text-sm">
+                                ${parseFloat(editAmount).toLocaleString()}
+                                <span className="text-xs text-slate-500 ml-1">(from wallet)</span>
+                              </div>
+                            ) : (
+                              <input
+                                type="number"
+                                value={editAmount}
+                                onChange={(e) => setEditAmount(e.target.value)}
+                                className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+                              />
+                            )}
                           </div>
                           <div>
                             <label className="text-xs text-slate-400">Fixed APY %</label>
@@ -639,7 +679,19 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
           {/* Add Position Form */}
           <div className="bg-slate-800 rounded-lg p-4">
-            <h3 className="text-md font-medium text-white mb-4">Add Position</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-md font-medium text-white">Add Position</h3>
+              <button
+                type="button"
+                onClick={() => setShowWalletImport(true)}
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Import from Wallet
+              </button>
+            </div>
             <div className="space-y-4">
               {/* Pool Search */}
               <div>
@@ -824,6 +876,13 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
           </div>
         </div>
       </div>
+
+      {/* Wallet Import Modal */}
+      <WalletImportModal
+        isOpen={showWalletImport}
+        onClose={() => setShowWalletImport(false)}
+        onImportComplete={() => loadUnmappedPositions()}
+      />
     </div>
   );
 }
