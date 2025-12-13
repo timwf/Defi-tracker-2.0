@@ -205,6 +205,8 @@ export async function updatePositionInDb(
   if (updates.entryDate !== undefined) updateData.entry_date = updates.entryDate || null;
   if (updates.notes !== undefined) updateData.notes = updates.notes || null;
   if ('fixedApy' in updates) updateData.fixed_apy = updates.fixedApy ?? null;
+  if (updates.tokenBalance !== undefined) updateData.token_balance = updates.tokenBalance;
+  if (updates.tokenSymbol !== undefined) updateData.token_symbol = updates.tokenSymbol || null;
 
   const { error } = await supabase
     .from('positions')

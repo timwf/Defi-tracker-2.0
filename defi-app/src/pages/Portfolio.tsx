@@ -47,7 +47,9 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
   const [refreshingPoolId, setRefreshingPoolId] = useState<string | null>(null);
   const [autoFetchProgress, setAutoFetchProgress] = useState<{ current: number; total: number } | null>(null);
+  const [walletRefreshProgress, setWalletRefreshProgress] = useState<{ current: number; total: number } | null>(null);
   const hasAutoFetched = useRef(false);
+  const hasAutoRefreshedWallet = useRef(false);
 
   // Wallet import state
   const [showWalletImport, setShowWalletImport] = useState(false);
@@ -220,6 +222,64 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     };
 
     fetchStaleData();
+  }, [pools.length, positions.length, onRefreshPositions]);
+
+  // Auto-refresh wallet positions on page load
+  useEffect(() => {
+    if (pools.length === 0 || positions.length === 0 || hasAutoRefreshedWallet.current) return;
+
+    const walletPositions = positions.filter(
+      pos => pos.source === 'wallet' && pos.walletAddress && pos.tokenAddress
+    );
+
+    if (walletPositions.length === 0) {
+      hasAutoRefreshedWallet.current = true;
+      return;
+    }
+
+    hasAutoRefreshedWallet.current = true;
+
+    const refreshWalletPositions = async () => {
+      setWalletRefreshProgress({ current: 0, total: walletPositions.length });
+
+      for (let i = 0; i < walletPositions.length; i++) {
+        const pos = walletPositions[i];
+        const pool = pools.find(p => p.pool === pos.poolId);
+
+        if (pool && pos.walletAddress && pos.tokenAddress) {
+          try {
+            const result = await refreshTokenBalance(
+              pos.walletAddress,
+              pos.tokenAddress,
+              pool.chain
+            );
+
+            if (result) {
+              await updatePositionInDb(pos.poolId, {
+                tokenBalance: result.balance,
+                tokenSymbol: result.symbol || pos.tokenSymbol,
+                amountUsd: result.usdValue ?? pos.amountUsd,
+              });
+            }
+          } catch (err) {
+            console.error('Failed to refresh wallet position:', pos.poolId, err);
+          }
+        }
+
+        setWalletRefreshProgress({ current: i + 1, total: walletPositions.length });
+
+        if (i < walletPositions.length - 1) {
+          await new Promise(r => setTimeout(r, 1500)); // Rate limit
+        }
+      }
+
+      setWalletRefreshProgress(null);
+      if (onRefreshPositions) {
+        onRefreshPositions();
+      }
+    };
+
+    refreshWalletPositions();
   }, [pools.length, positions.length, onRefreshPositions]);
 
   // Organic APY - weighted by base yield only (excludes reward tokens)
@@ -461,6 +521,17 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
           Refreshing historical data... {autoFetchProgress.current}/{autoFetchProgress.total} positions
+        </div>
+      )}
+
+      {/* Wallet refresh progress banner */}
+      {walletRefreshProgress && (
+        <div className="bg-purple-900/50 text-purple-200 px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Refreshing wallet balances... {walletRefreshProgress.current}/{walletRefreshProgress.total} positions
         </div>
       )}
 
