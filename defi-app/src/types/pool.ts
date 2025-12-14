@@ -126,6 +126,7 @@ export interface HeldPosition {
   // ERC-4626 vault settings
   isShareBased?: boolean;       // User override: treat as share-based vault (use convertToAssets)
   underlyingValue?: number;     // Cached underlying value from convertToAssets
+  actualDepositedUsd?: number;  // Actual underlying tokens deposited to vault (from on-chain transfers)
 }
 
 // Scanned token from wallet

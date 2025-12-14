@@ -3,7 +3,7 @@ import type { Pool, HeldPosition, CalculatedMetrics, UnmappedPosition } from '..
 import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../utils/heldPositions';
 import { getCachedData, getPoolMetrics, fetchPoolHistoryWithCache, isCacheValid } from '../utils/historicalData';
 import { fetchUnmappedPositions } from '../utils/unmappedPositions';
-import { refreshTokenBalance, getAllTokenTransfers, getVaultUnderlyingValue } from '../utils/walletScanner';
+import { refreshTokenBalance, getAllTokenTransfers, getVaultUnderlyingValue, getVaultDepositedAmount, getPTCostBasis } from '../utils/walletScanner';
 import { downloadPortfolioJson } from '../utils/exportPortfolio';
 import { formatTvl } from '../utils/filterPools';
 import { MetricInfo } from '../components/MetricInfo';
@@ -317,16 +317,43 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                     updates.underlyingValue = vaultResult.underlyingValue;
                     // Use underlying value for USD amount (assuming stablecoin = $1)
                     updates.amountUsd = vaultResult.underlyingValue;
-                    console.log(`[Share-based Vault - Auto] ${result.symbol || pos.tokenSymbol}`, {
-                      shares: result.balance,
-                      sharesRaw: result.balanceRaw.toString(),
-                      decimals: result.decimals,
-                      underlyingValue: vaultResult.underlyingValue,
-                      yield: vaultResult.underlyingValue - (updates.initialTokenBalance || result.balance),
-                    });
                   }
+
+                  // Get actual deposited amount by tracking underlying token transfers TO the vault
+                  const depositResult = await getVaultDepositedAmount(
+                    pos.tokenAddress,
+                    pos.walletAddress!,
+                    pool.chain
+                  );
+
+                  if (depositResult) {
+                    updates.actualDepositedUsd = depositResult.totalDeposited;
+                  }
+
+                  const yieldCalc = vaultResult && depositResult
+                      ? vaultResult.underlyingValue - depositResult.totalDeposited
+                      : null;
+                  console.log(`[Share-based Vault - Auto] ${result.symbol || pos.tokenSymbol}: underlying=$${vaultResult?.underlyingValue?.toFixed(2)}, deposited=$${depositResult?.totalDeposited?.toFixed(2)}, yield=$${yieldCalc?.toFixed(2) ?? 'N/A'}`);
                 } catch (err) {
                   console.error('Failed to get vault underlying value:', pos.poolId, err);
+                }
+              }
+
+              // If Pendle PT token, get cost basis from purchase transactions
+              if (pool.project === 'pendle' || (result.symbol?.startsWith('PT-') && !pos.isShareBased)) {
+                try {
+                  const costBasis = await getPTCostBasis(
+                    pos.tokenAddress,
+                    pos.walletAddress!,
+                    pool.chain
+                  );
+                  if (costBasis && costBasis.totalCost > 0) {
+                    updates.actualDepositedUsd = costBasis.totalCost;
+                    const ptYield = result.usdValue ? result.usdValue - costBasis.totalCost : null;
+                    console.log(`[Pendle PT - Auto] ${result.symbol}: cost=$${costBasis.totalCost.toFixed(2)}, current=$${result.usdValue?.toFixed(2)}, yield=$${ptYield?.toFixed(2) ?? 'N/A'}`);
+                  }
+                } catch (err) {
+                  console.error('Failed to get PT cost basis:', pos.poolId, err);
                 }
               }
 
@@ -576,14 +603,29 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
               updates.underlyingValue = vaultResult.underlyingValue;
               // Use underlying value for USD amount (assuming stablecoin = $1)
               updates.amountUsd = vaultResult.underlyingValue;
-              console.log('[Share-based Vault]', position.tokenSymbol, {
-                shares: result.balance,
-                sharesRaw: result.balanceRaw.toString(),
-                decimals: result.decimals,
-                underlyingValue: vaultResult.underlyingValue,
-                yield: vaultResult.underlyingValue - (updates.initialTokenBalance || result.balance),
-              });
             }
+
+            // Get actual deposited amount by tracking underlying token transfers TO the vault
+            const depositResult = await getVaultDepositedAmount(
+              position.tokenAddress,
+              position.walletAddress!,
+              pool.chain
+            );
+
+            if (depositResult) {
+              updates.actualDepositedUsd = depositResult.totalDeposited;
+            }
+
+            console.log('[Share-based Vault]', position.tokenSymbol, {
+              shares: result.balance,
+              sharesRaw: result.balanceRaw.toString(),
+              decimals: result.decimals,
+              underlyingValue: vaultResult?.underlyingValue,
+              actualDeposited: depositResult?.totalDeposited,
+              yield: vaultResult && depositResult
+                ? vaultResult.underlyingValue - depositResult.totalDeposited
+                : 'N/A',
+            });
           } catch (err) {
             console.error('Failed to get vault underlying value:', poolId, err);
           }

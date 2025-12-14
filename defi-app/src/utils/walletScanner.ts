@@ -385,6 +385,319 @@ export async function getVaultUnderlyingValue(
   }
 }
 
+// Alternative deposit tokens that can be converted to the underlying asset via PSM/swap
+// For sUSDS vault, users can deposit with USDC or DAI which get converted to USDS
+const ALTERNATIVE_DEPOSIT_TOKENS: Record<string, Record<string, string[]>> = {
+  'Ethereum': {
+    // USDS address -> also track USDC and DAI (both convertible via PSM)
+    '0xdc035d45d973e3ec169d2276ddab16f1e407384f': [
+      '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // USDC
+      '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+    ],
+  },
+};
+
+// Get actual USD deposited to an ERC-4626 vault by tracking deposit transactions
+// Strategy: Find txs where user received vault shares, then find underlying token outflows in those txs
+export async function getVaultDepositedAmount(
+  vaultAddress: string,
+  walletAddress: string,
+  chain: string
+): Promise<{ totalDeposited: number; underlyingAddress: string; underlyingDecimals: number } | null> {
+  if (!CHAIN_CONFIG[chain]) return null;
+
+  try {
+    const url = getAlchemyUrl(chain);
+
+    // Step 1: Get the underlying asset address by calling asset() on the vault
+    const assetResponse = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_call',
+        params: [{
+          to: vaultAddress,
+          data: '0x38d52e0f', // asset() function selector
+        }, 'latest'],
+        id: 1,
+      }),
+    });
+
+    if (!assetResponse.ok) return null;
+
+    const assetData = await assetResponse.json();
+    if (!assetData.result || assetData.result === '0x') {
+      console.warn('[getVaultDepositedAmount] asset() call failed');
+      return null;
+    }
+
+    // Extract address from the 32-byte response (last 20 bytes)
+    const underlyingAddress = '0x' + assetData.result.slice(-40);
+
+    // Get underlying token decimals
+    const underlyingMetadata = await getTokenMetadata(underlyingAddress, chain);
+    const underlyingDecimals = underlyingMetadata.decimals ?? 6;
+
+    // Step 2: Get all transactions where user RECEIVED vault shares (deposit = receiving shares)
+    const shareReceiveResponse = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'alchemy_getAssetTransfers',
+        params: [{
+          fromBlock: '0x0',
+          toBlock: 'latest',
+          toAddress: walletAddress,
+          contractAddresses: [vaultAddress],
+          category: ['erc20'],
+          withMetadata: true,
+          order: 'asc',
+        }],
+        id: 2,
+      }),
+    });
+
+    if (!shareReceiveResponse.ok) return null;
+
+    const shareReceiveData = await shareReceiveResponse.json();
+    const shareReceives: AssetTransfer[] = shareReceiveData.result?.transfers || [];
+
+    // Get unique tx hashes where user received vault shares (these are deposit txs)
+    const depositTxHashes = new Set(shareReceives.map(t => t.hash));
+
+    console.log('[getVaultDepositedAmount] Found deposit txs:', depositTxHashes.size);
+    console.log('[getVaultDepositedAmount] DEPOSIT TXS (shares received):');
+    shareReceives.forEach(t => console.log(`  ${t.hash} - ${t.value} shares from ${t.from}`));
+
+    if (depositTxHashes.size === 0) {
+      return { totalDeposited: 0, underlyingAddress, underlyingDecimals };
+    }
+
+    // Step 3: Get ALL outgoing transfers of underlying token from user
+    const underlyingOutResponse = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'alchemy_getAssetTransfers',
+        params: [{
+          fromBlock: '0x0',
+          toBlock: 'latest',
+          fromAddress: walletAddress,
+          contractAddresses: [underlyingAddress],
+          category: ['erc20'],
+          withMetadata: true,
+          order: 'asc',
+        }],
+        id: 3,
+      }),
+    });
+
+    if (!underlyingOutResponse.ok) return null;
+
+    const underlyingOutData = await underlyingOutResponse.json();
+    const underlyingOuts: AssetTransfer[] = underlyingOutData.result?.transfers || [];
+
+    console.log(`[getVaultDepositedAmount] ${underlyingMetadata.symbol} OUTFLOWS from wallet:`);
+    underlyingOuts.forEach(t => console.log(`  ${t.hash} - ${t.value} ${underlyingMetadata.symbol} to ${t.to}`));
+
+    // Combine all token outflows (underlying + alternatives like USDC/DAI for USDS)
+    let allTokenOuts: AssetTransfer[] = [...underlyingOuts];
+
+    // Check for alternative deposit tokens (e.g., USDC can be deposited into sUSDS via PSM)
+    const altTokens = ALTERNATIVE_DEPOSIT_TOKENS[chain]?.[underlyingAddress.toLowerCase()];
+    if (altTokens && altTokens.length > 0) {
+      for (const altToken of altTokens) {
+        const altResponse = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'alchemy_getAssetTransfers',
+            params: [{
+              fromBlock: '0x0',
+              toBlock: 'latest',
+              fromAddress: walletAddress,
+              contractAddresses: [altToken],
+              category: ['erc20'],
+              withMetadata: true,
+              order: 'asc',
+            }],
+            id: 4,
+          }),
+        });
+
+        if (altResponse.ok) {
+          const altData = await altResponse.json();
+          const altOuts: AssetTransfer[] = altData.result?.transfers || [];
+          if (altOuts.length > 0) {
+            const altMeta = await getTokenMetadata(altToken, chain);
+            console.log(`[getVaultDepositedAmount] ${altMeta.symbol} OUTFLOWS (alternative deposit token):`);
+            altOuts.forEach(t => console.log(`  ${t.hash} - ${t.value} ${altMeta.symbol} to ${t.to}`));
+            allTokenOuts = [...allTokenOuts, ...altOuts];
+          }
+        }
+      }
+    }
+
+    // Sum all token outflows that occurred in deposit transactions
+    let totalDeposited = 0;
+    const matchedTxs: string[] = [];
+    for (const transfer of allTokenOuts) {
+      if (depositTxHashes.has(transfer.hash) && !matchedTxs.includes(transfer.hash)) {
+        totalDeposited += transfer.value ?? 0;
+        matchedTxs.push(transfer.hash);
+      }
+    }
+
+    console.log(`[getVaultDepositedAmount] ${underlyingMetadata.symbol}: depositTxs=${depositTxHashes.size}, matchedTxs=${matchedTxs.length}, totalDeposited=$${totalDeposited.toFixed(2)}`);
+
+    // Log unmatched deposit txs
+    const unmatchedTxs = Array.from(depositTxHashes).filter(h => !matchedTxs.includes(h));
+    if (unmatchedTxs.length > 0) {
+      console.log('[getVaultDepositedAmount] UNMATCHED DEPOSIT TXS (no token outflow found):');
+      unmatchedTxs.forEach(hash => {
+        const tx = shareReceives.find(t => t.hash === hash);
+        console.log(`  ${hash} - received ${tx?.value} shares (NO token outflow found!)`);
+      });
+    }
+
+    return { totalDeposited, underlyingAddress, underlyingDecimals };
+  } catch (err) {
+    console.error('[getVaultDepositedAmount] Error:', err);
+    return null;
+  }
+}
+
+// Common stablecoins and yield tokens to check for PT token purchases (by chain)
+const STABLECOINS_BY_CHAIN: Record<string, { address: string; symbol: string; decimals: number }[]> = {
+  'Arbitrum': [
+    { address: '0xaf88d065e77c8cc2239327c5edb3a432268e5831', symbol: 'USDC', decimals: 6 },
+    { address: '0xff970a61a04b1ca14834a43f5de4533ebddb5cc8', symbol: 'USDC.e', decimals: 6 },
+    { address: '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9', symbol: 'USDT', decimals: 6 },
+    { address: '0xda10009cbd5d07dd0cecc66161fc93d7c9000da1', symbol: 'DAI', decimals: 18 },
+    // Yield-bearing tokens commonly used in Pendle
+    { address: '0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f', symbol: 'WBTC', decimals: 8 },
+    { address: '0x1c22531aa9747d76fff8f0a43b37954ca67d28e0', symbol: 'sUSDai', decimals: 18 },
+  ],
+  'Ethereum': [
+    { address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', symbol: 'USDC', decimals: 6 },
+    { address: '0xdac17f958d2ee523a2206206994597c13d831ec7', symbol: 'USDT', decimals: 6 },
+    { address: '0x6b175474e89094c44da98b954eedeac495271d0f', symbol: 'DAI', decimals: 18 },
+  ],
+  'Base': [
+    { address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', symbol: 'USDC', decimals: 6 },
+  ],
+};
+
+// Get cost basis for PT tokens by tracking stablecoin outflows in purchase transactions
+export async function getPTCostBasis(
+  ptTokenAddress: string,
+  walletAddress: string,
+  chain: string
+): Promise<{ totalCost: number; purchaseTxCount: number } | null> {
+  if (!CHAIN_CONFIG[chain]) return null;
+
+  try {
+    const url = getAlchemyUrl(chain);
+
+    // Step 1: Find all transactions where user received PT tokens
+    const ptReceiveResponse = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'alchemy_getAssetTransfers',
+        params: [{
+          fromBlock: '0x0',
+          toBlock: 'latest',
+          toAddress: walletAddress,
+          contractAddresses: [ptTokenAddress],
+          category: ['erc20'],
+          withMetadata: true,
+          order: 'asc',
+        }],
+        id: 1,
+      }),
+    });
+
+    if (!ptReceiveResponse.ok) return null;
+
+    const ptReceiveData = await ptReceiveResponse.json();
+    const ptReceives: AssetTransfer[] = ptReceiveData.result?.transfers || [];
+
+    // Get unique tx hashes where user received PT tokens (these are purchase txs)
+    const purchaseTxHashes = new Set(ptReceives.map(t => t.hash));
+
+    console.log('[getPTCostBasis] Found PT receive txs:', purchaseTxHashes.size);
+    console.log('[getPTCostBasis] PT RECEIVE TXS:');
+    ptReceives.forEach(t => console.log(`  ${t.hash} - ${t.value} PT from ${t.from}`));
+
+    if (purchaseTxHashes.size === 0) {
+      return { totalCost: 0, purchaseTxCount: 0 };
+    }
+
+    // Step 2: For each stablecoin, find outflows that match purchase tx hashes
+    const stablecoins = STABLECOINS_BY_CHAIN[chain] || [];
+    let totalCost = 0;
+    const matchedTxs: string[] = [];
+
+    for (const stable of stablecoins) {
+      const stableOutResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'alchemy_getAssetTransfers',
+          params: [{
+            fromBlock: '0x0',
+            toBlock: 'latest',
+            fromAddress: walletAddress,
+            contractAddresses: [stable.address],
+            category: ['erc20'],
+            withMetadata: true,
+            order: 'asc',
+          }],
+          id: 2,
+        }),
+      });
+
+      if (!stableOutResponse.ok) continue;
+
+      const stableOutData = await stableOutResponse.json();
+      const stableOuts: AssetTransfer[] = stableOutData.result?.transfers || [];
+
+      // Find stablecoin outflows that occurred in PT purchase transactions
+      for (const transfer of stableOuts) {
+        if (purchaseTxHashes.has(transfer.hash) && !matchedTxs.includes(transfer.hash)) {
+          totalCost += transfer.value ?? 0;
+          matchedTxs.push(transfer.hash);
+          console.log(`[getPTCostBasis] Matched: ${transfer.hash} - ${transfer.value} ${stable.symbol}`);
+        }
+      }
+    }
+
+    console.log(`[getPTCostBasis] purchaseTxs=${purchaseTxHashes.size}, matchedTxs=${matchedTxs.length}, totalCost=$${totalCost.toFixed(2)}`);
+
+    // Log unmatched purchase txs
+    const unmatchedTxs = Array.from(purchaseTxHashes).filter(h => !matchedTxs.includes(h));
+    if (unmatchedTxs.length > 0) {
+      console.log('[getPTCostBasis] UNMATCHED PT PURCHASE TXS (no stablecoin outflow found):');
+      unmatchedTxs.forEach(hash => {
+        const tx = ptReceives.find(t => t.hash === hash);
+        console.log(`  ${hash} - received ${tx?.value} PT (NO stablecoin outflow!)`);
+      });
+    }
+
+    return { totalCost, purchaseTxCount: matchedTxs.length };
+  } catch (err) {
+    console.error('[getPTCostBasis] Error:', err);
+    return null;
+  }
+}
+
 export async function scanWalletTokens(
   walletAddress: string,
   chains: string[],

@@ -524,13 +524,16 @@ export function PoolInfoCard({
             (() => {
               // Use user's isShareBased setting
               const isShareBased = position.isShareBased || false;
+              // Detect Pendle PT tokens by project name or symbol prefix
+              const isPendlePT = pool.project === 'pendle' || position.tokenSymbol?.startsWith('PT-');
 
-              // For share-based vaults with underlyingValue from convertToAssets
-              // deposited USD = initial shares * $1 (for stablecoin vaults)
-              // current USD = underlyingValue (actual value from contract)
-              const depositedUsd = pool.stablecoin && position.initialTokenBalance
-                ? position.initialTokenBalance
-                : null;
+              // For share-based vaults: use actualDepositedUsd (tracks underlying token transfers TO vault)
+              // For Pendle PT tokens: use actualDepositedUsd (tracks stablecoin spent to purchase PT)
+              // This gives accurate deposited amount regardless of vault share price at deposit time
+              // Fallback to initialTokenBalance (share count) for backwards compatibility
+              const depositedUsd = (isShareBased && pool.stablecoin) || isPendlePT
+                ? (position.actualDepositedUsd ?? (pool.stablecoin ? position.initialTokenBalance : null) ?? null)
+                : (pool.stablecoin && position.initialTokenBalance ? position.initialTokenBalance : null);
 
               // Use underlyingValue if available (from convertToAssets), otherwise use amountUsd
               const currentUsd = isShareBased && position.underlyingValue

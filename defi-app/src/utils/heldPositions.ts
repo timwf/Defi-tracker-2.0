@@ -117,6 +117,7 @@ export async function fetchPositions(): Promise<HeldPosition[]> {
     avgEntryPrice: row.avg_entry_price ? Number(row.avg_entry_price) : undefined,
     isShareBased: row.is_share_based ?? undefined,
     underlyingValue: row.underlying_value ? Number(row.underlying_value) : undefined,
+    actualDepositedUsd: row.actual_deposited_usd ? Number(row.actual_deposited_usd) : undefined,
   }));
 }
 
@@ -225,6 +226,7 @@ export async function updatePositionInDb(
   if (updates.avgEntryPrice !== undefined) updateData.avg_entry_price = updates.avgEntryPrice;
   if ('isShareBased' in updates) updateData.is_share_based = updates.isShareBased ?? null;
   if (updates.underlyingValue !== undefined) updateData.underlying_value = updates.underlyingValue;
+  if (updates.actualDepositedUsd !== undefined) updateData.actual_deposited_usd = updates.actualDepositedUsd;
 
   console.log('[DB Update]', poolId, updateData);
 
