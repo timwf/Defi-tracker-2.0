@@ -272,6 +272,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
               console.log(`[Position Debug] ${pool.project} - ${result.symbol || pos.tokenSymbol}`, {
                 chain: pool.chain,
                 isStablecoin: pool.stablecoin,
+                isShareBased: pos.isShareBased || false,
                 currentBalance: result.balance,
                 storedInitialBalance: pos.initialTokenBalance,
                 currentUsdValue: result.usdValue,
@@ -300,6 +301,34 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                   }
                 } catch (err) {
                   console.error('Failed to fetch transaction history:', pos.poolId, err);
+                }
+              }
+
+              // If share-based vault, get underlying value via convertToAssets
+              if (pos.isShareBased) {
+                try {
+                  // Convert balance to raw BigInt (assuming 6 decimals for USDC-based vaults)
+                  const decimals = 6; // Most stablecoin vaults use 6 decimals
+                  const sharesRaw = BigInt(Math.round(result.balance * (10 ** decimals)));
+
+                  const vaultResult = await getVaultUnderlyingValue(
+                    pos.tokenAddress,
+                    sharesRaw,
+                    pool.chain
+                  );
+
+                  if (vaultResult) {
+                    updates.underlyingValue = vaultResult.underlyingValue;
+                    // Use underlying value for USD amount (assuming stablecoin = $1)
+                    updates.amountUsd = vaultResult.underlyingValue;
+                    console.log(`[Share-based Vault - Auto] ${result.symbol || pos.tokenSymbol}`, {
+                      shares: result.balance,
+                      underlyingValue: vaultResult.underlyingValue,
+                      yield: vaultResult.underlyingValue - (updates.initialTokenBalance || result.balance),
+                    });
+                  }
+                } catch (err) {
+                  console.error('Failed to get vault underlying value:', pos.poolId, err);
                 }
               }
 
