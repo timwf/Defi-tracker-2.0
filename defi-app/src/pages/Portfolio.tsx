@@ -274,6 +274,12 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                     updates.firstAcquiredAt = txData.firstAcquiredAt;
                     updates.transactions = txData.transactions;
                     updates.initialTokenBalance = txData.totalDeposited;
+                    console.log('[Yield Debug]', pos.tokenSymbol, {
+                      currentBalance: result.balance,
+                      totalDeposited: txData.totalDeposited,
+                      yield: result.balance - txData.totalDeposited,
+                      txCount: txData.transactions.length,
+                    });
                   }
                 } catch (err) {
                   console.error('Failed to fetch transaction history:', pos.poolId, err);
@@ -474,12 +480,35 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       );
 
       if (result) {
-        // Update the position with new balance and USD value
-        await updatePositionInDb(poolId, {
+        const updates: Parameters<typeof updatePositionInDb>[1] = {
           tokenBalance: result.balance,
           tokenSymbol: result.symbol || position.tokenSymbol,
           amountUsd: result.usdValue ?? position.amountUsd,
-        });
+        };
+
+        // Always re-fetch transaction history on manual refresh to catch new deposits
+        try {
+          const txData = await getAllTokenTransfers(
+            position.walletAddress,
+            position.tokenAddress,
+            pool.chain
+          );
+          if (txData) {
+            updates.firstAcquiredAt = txData.firstAcquiredAt;
+            updates.transactions = txData.transactions;
+            updates.initialTokenBalance = txData.totalDeposited;
+            console.log('[Yield Debug - Manual Refresh]', position.tokenSymbol, {
+              currentBalance: result.balance,
+              totalDeposited: txData.totalDeposited,
+              yield: result.balance - txData.totalDeposited,
+              txCount: txData.transactions.length,
+            });
+          }
+        } catch (err) {
+          console.error('Failed to fetch transaction history:', poolId, err);
+        }
+
+        await updatePositionInDb(poolId, updates);
 
         if (onRefreshPositions) {
           await onRefreshPositions();
