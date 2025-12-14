@@ -506,43 +506,42 @@ export function PoolInfoCard({
             </div>
           </div>
 
-          {/* Entry Data Section */}
-          {(position.firstAcquiredAt || position.entryDate || position.transactions) && (
+          {/* Yield Tracking Section */}
+          {(position.firstAcquiredAt || position.entryDate || position.transactions || position.initialTokenBalance) && (
             <div className="mt-4 pt-3 border-t border-slate-700/50">
-              <div className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-2">Entry Info</div>
+              <div className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-2">Yield Tracking</div>
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div>
-                  <div className="text-slate-500 text-xs">Acquired</div>
+                  <div className="text-slate-500 text-xs">Deposited</div>
                   <div className="text-slate-300">
-                    {position.firstAcquiredAt
-                      ? new Date(position.firstAcquiredAt).toLocaleDateString()
-                      : position.entryDate
-                      ? new Date(position.entryDate).toLocaleDateString()
+                    {position.initialTokenBalance
+                      ? `${position.initialTokenBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${position.tokenSymbol || ''}`
                       : '-'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-500 text-xs">{position.transactions && position.transactions.length > 1 ? 'Avg Price' : 'Entry Price'}</div>
+                  <div className="text-slate-500 text-xs">Current</div>
                   <div className="text-slate-300">
-                    {position.avgEntryPrice
-                      ? `$${position.avgEntryPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
-                      : position.entryPriceUsd
-                      ? `$${position.entryPriceUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
+                    {position.tokenBalance
+                      ? `${position.tokenBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${position.tokenSymbol || ''}`
                       : '-'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-500 text-xs">Gain/Loss</div>
-                  {(position.totalCostBasis || position.initialAmountUsd) && position.amountUsd ? (
+                  <div className="text-slate-500 text-xs">Yield Earned</div>
+                  {position.tokenBalance && position.initialTokenBalance ? (
                     (() => {
-                      const costBasis = position.totalCostBasis ?? position.initialAmountUsd ?? 0;
-                      const gain = position.amountUsd - costBasis;
-                      const gainPct = costBasis > 0 ? ((gain / costBasis) * 100) : 0;
-                      const isPositive = gain >= 0;
+                      const yieldTokens = position.tokenBalance - position.initialTokenBalance;
+                      const isPositive = yieldTokens >= 0;
+                      // Calculate USD value of yield using current price
+                      const currentPrice = position.amountUsd && position.tokenBalance > 0
+                        ? position.amountUsd / position.tokenBalance
+                        : 1; // Assume $1 for stablecoins if no price
+                      const yieldUsd = yieldTokens * currentPrice;
                       return (
                         <div className={isPositive ? 'text-green-400' : 'text-red-400'}>
-                          {isPositive ? '+' : ''}{formatCurrency(gain)}
-                          <span className="text-xs ml-1">({isPositive ? '+' : ''}{gainPct.toFixed(1)}%)</span>
+                          {isPositive ? '+' : ''}{yieldTokens.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          <span className="text-xs ml-1">(~{formatCurrency(yieldUsd)})</span>
                         </div>
                       );
                     })()
@@ -551,19 +550,19 @@ export function PoolInfoCard({
                   )}
                 </div>
               </div>
-              {(position.totalCostBasis || position.initialAmountUsd) && (
-                <div className="text-xs text-slate-500 mt-2">
-                  Cost Basis: {formatCurrency(position.totalCostBasis ?? position.initialAmountUsd ?? 0)}
-                  {position.transactions && position.transactions.length > 1 && (
-                    <span className="ml-1">({position.transactions.length} deposits)</span>
-                  )}
-                  {position.firstAcquiredAt && (
+              <div className="text-xs text-slate-500 mt-2">
+                {position.firstAcquiredAt && (
+                  <span>
+                    First deposit: {new Date(position.firstAcquiredAt).toLocaleDateString()}
                     <span className="ml-2">
                       · Held {Math.floor((Date.now() - position.firstAcquiredAt) / (1000 * 60 * 60 * 24))} days
                     </span>
-                  )}
-                </div>
-              )}
+                  </span>
+                )}
+                {position.transactions && position.transactions.length > 1 && (
+                  <span className="ml-2">· {position.transactions.length} deposits</span>
+                )}
+              </div>
 
               {/* Expandable Transaction History */}
               {position.transactions && position.transactions.length > 0 && (
@@ -572,7 +571,7 @@ export function PoolInfoCard({
                     onClick={() => setShowTransactionHistory(!showTransactionHistory)}
                     className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
                   >
-                    {showTransactionHistory ? 'Hide' : 'Show'} Transaction History
+                    {showTransactionHistory ? 'Hide' : 'Show'} Deposit History
                     <svg
                       className={`w-3 h-3 transition-transform ${showTransactionHistory ? 'rotate-180' : ''}`}
                       fill="none"
@@ -599,24 +598,16 @@ export function PoolInfoCard({
                             </div>
                             <div className="text-right">
                               <div className="text-slate-300">
-                                {tx.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {position.tokenSymbol}
-                              </div>
-                              <div className="text-slate-500">
-                                @ ${tx.priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) ?? '-'}
-                              </div>
-                            </div>
-                            <div className="text-right ml-3 min-w-[60px]">
-                              <div className="text-slate-300">
-                                {tx.valueUsd ? formatCurrency(tx.valueUsd) : '-'}
+                                +{tx.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {position.tokenSymbol}
                               </div>
                             </div>
                           </div>
                         ))}
                       </div>
                       <div className="mt-2 pt-2 border-t border-slate-700 flex justify-between text-xs">
-                        <span className="text-slate-400">Total Invested</span>
+                        <span className="text-slate-400">Total Deposited</span>
                         <span className="text-slate-300 font-medium">
-                          {formatCurrency(position.totalCostBasis ?? position.transactions.reduce((sum, tx) => sum + (tx.valueUsd ?? 0), 0))}
+                          {position.initialTokenBalance?.toLocaleString(undefined, { maximumFractionDigits: 2 })} {position.tokenSymbol}
                         </span>
                       </div>
                     </div>

@@ -273,12 +273,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                   if (txData) {
                     updates.firstAcquiredAt = txData.firstAcquiredAt;
                     updates.transactions = txData.transactions;
-                    updates.totalCostBasis = txData.totalCostBasis;
-                    updates.avgEntryPrice = txData.avgEntryPrice;
-                    // Also set legacy fields for backward compatibility
                     updates.initialTokenBalance = txData.totalDeposited;
-                    updates.initialAmountUsd = txData.totalCostBasis;
-                    updates.entryPriceUsd = txData.avgEntryPrice;
                   }
                 } catch (err) {
                   console.error('Failed to fetch transaction history:', pos.poolId, err);

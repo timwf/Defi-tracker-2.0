@@ -462,15 +462,13 @@ export async function getTokenEntryData(
   };
 }
 
-// Get ALL token transfers with full cost basis calculation
+// Get ALL token transfers (deposits) - for yield tracking
 export async function getAllTokenTransfers(
   walletAddress: string,
   tokenAddress: string,
   chain: string
 ): Promise<{
   transactions: TokenTransaction[];
-  totalCostBasis: number;
-  avgEntryPrice: number;
   firstAcquiredAt: number;
   totalDeposited: number;
 } | null> {
@@ -506,46 +504,30 @@ export async function getAllTokenTransfers(
 
     if (transfers.length === 0) return null;
 
-    // Build transaction list with historical prices
+    // Build transaction list (no historical price fetching needed for stablecoin yield tracking)
     const transactions: TokenTransaction[] = [];
-    let totalCostBasis = 0;
     let totalDeposited = 0;
 
     for (const transfer of transfers) {
       const timestamp = new Date(transfer.metadata.blockTimestamp).getTime();
       const amount = transfer.value ?? 0;
 
-      // Fetch historical price for this transaction
-      // Add small delay to avoid rate limiting
-      if (transactions.length > 0) {
-        await new Promise(r => setTimeout(r, 300));
-      }
-
-      const priceUsd = await fetchHistoricalPrice(tokenAddress, chain, timestamp);
-      const valueUsd = priceUsd ? amount * priceUsd : null;
-
       transactions.push({
         timestamp,
         amount,
-        priceUsd,
-        valueUsd,
+        priceUsd: null, // Not needed for yield tracking
+        valueUsd: null, // Not needed for yield tracking
         type: 'deposit',
         txHash: transfer.hash,
       });
 
-      if (valueUsd) {
-        totalCostBasis += valueUsd;
-      }
       totalDeposited += amount;
     }
 
     const firstAcquiredAt = transactions[0]?.timestamp ?? 0;
-    const avgEntryPrice = totalDeposited > 0 ? totalCostBasis / totalDeposited : 0;
 
     return {
       transactions,
-      totalCostBasis,
-      avgEntryPrice,
       firstAcquiredAt,
       totalDeposited,
     };
