@@ -510,6 +510,31 @@ export function PoolInfoCard({
           {(position.firstAcquiredAt || position.entryDate || position.transactions || position.initialTokenBalance) && (
             <div className="mt-4 pt-3 border-t border-slate-700/50">
               <div className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-2">Yield Tracking</div>
+
+              {/* Stablecoin Depeg Indicator */}
+              {pool.stablecoin && position.tokenBalance && position.amountUsd && (
+                (() => {
+                  const currentPrice = position.amountUsd / position.tokenBalance;
+                  const depegPct = ((currentPrice - 1) * 100);
+                  const isDepegged = Math.abs(depegPct) > 0.5; // More than 0.5% off peg
+                  const depegColor = Math.abs(depegPct) > 2 ? 'text-red-400' :
+                                    Math.abs(depegPct) > 0.5 ? 'text-yellow-400' : 'text-green-400';
+                  return (
+                    <div className={`mb-3 p-2 rounded-lg ${isDepegged ? 'bg-yellow-900/20 border border-yellow-700/30' : 'bg-slate-800/50'}`}>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Peg Status</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-300">${currentPrice.toFixed(4)}</span>
+                          <span className={depegColor}>
+                            ({depegPct >= 0 ? '+' : ''}{depegPct.toFixed(2)}%)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div>
                   <div className="text-slate-500 text-xs">Deposited</div>
@@ -533,15 +558,16 @@ export function PoolInfoCard({
                     (() => {
                       const yieldTokens = position.tokenBalance - position.initialTokenBalance;
                       const isPositive = yieldTokens >= 0;
-                      // Calculate USD value of yield using current price
-                      const currentPrice = position.amountUsd && position.tokenBalance > 0
-                        ? position.amountUsd / position.tokenBalance
-                        : 1; // Assume $1 for stablecoins if no price
-                      const yieldUsd = yieldTokens * currentPrice;
+                      // For stablecoins, assume 1 token = $1 USD (ignore depeg for yield)
+                      // For non-stablecoins, use actual current price
+                      const priceForYield = pool.stablecoin
+                        ? 1
+                        : (position.amountUsd && position.tokenBalance > 0 ? position.amountUsd / position.tokenBalance : 1);
+                      const yieldUsd = yieldTokens * priceForYield;
                       return (
                         <div className={isPositive ? 'text-green-400' : 'text-red-400'}>
                           {isPositive ? '+' : ''}{yieldTokens.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                          <span className="text-xs ml-1">(~{formatCurrency(yieldUsd)})</span>
+                          <span className="text-xs ml-1">({formatCurrency(yieldUsd)})</span>
                         </div>
                       );
                     })()
