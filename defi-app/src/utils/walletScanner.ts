@@ -220,12 +220,144 @@ async function fetchNativePrice(chain: string): Promise<number | null> {
   return null;
 }
 
+// Fetch underlying token prices for stablecoin vaults
+// Takes an array of token addresses with their chains and returns price info
+export interface UnderlyingTokenPrice {
+  address: string;
+  chain: string;
+  symbol: string | null;
+  price: number;
+  depegPct: number; // Percentage off from $1.00 peg
+}
+
+export async function fetchUnderlyingTokenPrices(
+  tokens: { address: string; chain: string }[]
+): Promise<UnderlyingTokenPrice[]> {
+  if (tokens.length === 0) return [];
+
+  // Build DeFiLlama coins parameter
+  const coins = tokens
+    .map(t => {
+      const llamaChain = DEFILLAMA_CHAINS[t.chain];
+      return llamaChain ? `${llamaChain}:${t.address.toLowerCase()}` : null;
+    })
+    .filter(Boolean)
+    .join(',');
+
+  if (!coins) return [];
+
+  try {
+    const response = await fetch(
+      `https://coins.llama.fi/prices/current/${coins}`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const coinPrices = data.coins || {};
+
+    const results: UnderlyingTokenPrice[] = [];
+
+    for (const token of tokens) {
+      const llamaChain = DEFILLAMA_CHAINS[token.chain];
+      if (!llamaChain) continue;
+
+      const key = `${llamaChain}:${token.address.toLowerCase()}`;
+      const priceData = coinPrices[key];
+
+      if (priceData?.price) {
+        const price = priceData.price;
+        const depegPct = (price - 1) * 100; // How far off from $1.00
+
+        results.push({
+          address: token.address,
+          chain: token.chain,
+          symbol: priceData.symbol || null,
+          price,
+          depegPct,
+        });
+      }
+    }
+
+    return results;
+  } catch (err) {
+    console.warn('Failed to fetch underlying token prices:', err);
+    return [];
+  }
+}
+
 function formatBalance(balanceRaw: bigint, decimals: number): number {
   if (decimals === 0) return Number(balanceRaw);
   const divisor = BigInt(10 ** decimals);
   const whole = balanceRaw / divisor;
   const remainder = balanceRaw % divisor;
   return Number(whole) + Number(remainder) / Number(divisor);
+}
+
+// ERC-4626 convertToAssets function selector: 0x07a2d13a
+// convertToAssets(uint256 shares) returns (uint256 assets)
+export async function getVaultUnderlyingValue(
+  vaultAddress: string,
+  sharesBalance: bigint,
+  chain: string
+): Promise<{ underlyingValue: number; underlyingDecimals: number } | null> {
+  if (!CHAIN_CONFIG[chain]) return null;
+
+  try {
+    const url = getAlchemyUrl(chain);
+
+    // Encode the function call: convertToAssets(uint256)
+    // Function selector: 0x07a2d13a
+    // Pad shares to 32 bytes
+    const sharesHex = sharesBalance.toString(16).padStart(64, '0');
+    const callData = `0x07a2d13a${sharesHex}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_call',
+        params: [{
+          to: vaultAddress,
+          data: callData,
+        }, 'latest'],
+        id: 1,
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (data.error || !data.result || data.result === '0x') {
+      console.warn('[convertToAssets] Call failed:', data.error?.message || 'empty result');
+      return null;
+    }
+
+    const underlyingRaw = BigInt(data.result);
+
+    // Get underlying token decimals by calling asset() then getting metadata
+    // For now, assume same decimals as shares (common for stablecoin vaults)
+    // We can enhance this later to call asset() if needed
+    const metadata = await getTokenMetadata(vaultAddress, chain);
+    const decimals = metadata.decimals ?? 6; // Default to 6 for USDC-based vaults
+
+    const underlyingValue = formatBalance(underlyingRaw, decimals);
+
+    console.log('[convertToAssets]', {
+      vaultAddress,
+      sharesBalance: sharesBalance.toString(),
+      underlyingRaw: underlyingRaw.toString(),
+      underlyingValue,
+      decimals,
+    });
+
+    return { underlyingValue, underlyingDecimals: decimals };
+  } catch (err) {
+    console.error('[convertToAssets] Error:', err);
+    return null;
+  }
 }
 
 export async function scanWalletTokens(
@@ -574,6 +706,16 @@ export async function refreshTokenBalance(
     const metadata = await getTokenMetadata(tokenAddress, chain);
     const decimals = metadata.decimals ?? 18;
     const balance = formatBalance(balanceRaw, decimals);
+
+    console.log('[Balance Debug]', {
+      tokenAddress,
+      chain,
+      symbol: metadata.symbol,
+      decimals,
+      balanceRawHex: tokenData.tokenBalance,
+      balanceRaw: balanceRaw.toString(),
+      balanceFormatted: balance,
+    });
 
     // Get price from DeFiLlama
     const priceMap = await fetchTokenPrices([{ chain, tokenAddress }]);

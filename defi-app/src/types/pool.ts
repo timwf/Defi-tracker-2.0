@@ -123,6 +123,9 @@ export interface HeldPosition {
   transactions?: TokenTransaction[];
   totalCostBasis?: number;      // sum of all deposit values
   avgEntryPrice?: number;       // totalCostBasis / total tokens deposited
+  // ERC-4626 vault settings
+  isShareBased?: boolean;       // User override: treat as share-based vault (use convertToAssets)
+  underlyingValue?: number;     // Cached underlying value from convertToAssets
 }
 
 // Scanned token from wallet

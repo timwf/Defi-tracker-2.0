@@ -115,6 +115,8 @@ export async function fetchPositions(): Promise<HeldPosition[]> {
     transactions: row.transactions || undefined,
     totalCostBasis: row.total_cost_basis ? Number(row.total_cost_basis) : undefined,
     avgEntryPrice: row.avg_entry_price ? Number(row.avg_entry_price) : undefined,
+    isShareBased: row.is_share_based ?? undefined,
+    underlyingValue: row.underlying_value ? Number(row.underlying_value) : undefined,
   }));
 }
 
@@ -221,6 +223,8 @@ export async function updatePositionInDb(
   if (updates.transactions !== undefined) updateData.transactions = updates.transactions;
   if (updates.totalCostBasis !== undefined) updateData.total_cost_basis = updates.totalCostBasis;
   if (updates.avgEntryPrice !== undefined) updateData.avg_entry_price = updates.avgEntryPrice;
+  if ('isShareBased' in updates) updateData.is_share_based = updates.isShareBased ?? null;
+  if (updates.underlyingValue !== undefined) updateData.underlying_value = updates.underlyingValue;
 
   const { error } = await supabase
     .from('positions')

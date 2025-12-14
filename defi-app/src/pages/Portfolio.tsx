@@ -3,7 +3,7 @@ import type { Pool, HeldPosition, CalculatedMetrics, UnmappedPosition } from '..
 import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../utils/heldPositions';
 import { getCachedData, getPoolMetrics, fetchPoolHistoryWithCache, isCacheValid } from '../utils/historicalData';
 import { fetchUnmappedPositions } from '../utils/unmappedPositions';
-import { refreshTokenBalance, getAllTokenTransfers } from '../utils/walletScanner';
+import { refreshTokenBalance, getAllTokenTransfers, getVaultUnderlyingValue } from '../utils/walletScanner';
 import { downloadPortfolioJson } from '../utils/exportPortfolio';
 import { formatTvl } from '../utils/filterPools';
 import { MetricInfo } from '../components/MetricInfo';
@@ -44,6 +44,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [editAmount, setEditAmount] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [editFixedApy, setEditFixedApy] = useState('');
+  const [editIsShareBased, setEditIsShareBased] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
   const [refreshingPoolId, setRefreshingPoolId] = useState<string | null>(null);
@@ -242,6 +243,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
     const refreshWalletPositions = async () => {
       setWalletRefreshProgress({ current: 0, total: walletPositions.length });
+      console.log('[Wallet Refresh] Starting refresh for', walletPositions.length, 'positions');
 
       for (let i = 0; i < walletPositions.length; i++) {
         const pos = walletPositions[i];
@@ -262,6 +264,22 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                 amountUsd: result.usdValue ?? pos.amountUsd,
               };
 
+              // Always log position data for debugging
+              const tokenPriceFromUsd = result.usdValue && result.balance > 0
+                ? result.usdValue / result.balance
+                : null;
+
+              console.log(`[Position Debug] ${pool.project} - ${result.symbol || pos.tokenSymbol}`, {
+                chain: pool.chain,
+                isStablecoin: pool.stablecoin,
+                currentBalance: result.balance,
+                storedInitialBalance: pos.initialTokenBalance,
+                currentUsdValue: result.usdValue,
+                tokenPrice: tokenPriceFromUsd?.toFixed(4),
+                yieldTokens: pos.initialTokenBalance ? result.balance - pos.initialTokenBalance : 'N/A (no initial)',
+                hasTxHistory: pos.transactions?.length ?? 0,
+              });
+
               // Fetch full transaction history if not already present
               if (!pos.transactions || pos.transactions.length === 0) {
                 try {
@@ -274,11 +292,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                     updates.firstAcquiredAt = txData.firstAcquiredAt;
                     updates.transactions = txData.transactions;
                     updates.initialTokenBalance = txData.totalDeposited;
-                    console.log('[Yield Debug]', pos.tokenSymbol, {
-                      currentBalance: result.balance,
+                    console.log(`[TX Fetch] ${result.symbol || pos.tokenSymbol}`, {
                       totalDeposited: txData.totalDeposited,
-                      yield: result.balance - txData.totalDeposited,
                       txCount: txData.transactions.length,
+                      calculatedYield: result.balance - txData.totalDeposited,
                     });
                   }
                 } catch (err) {
@@ -300,6 +317,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         }
       }
 
+      console.log('[Wallet Refresh] Complete');
       setWalletRefreshProgress(null);
       if (onRefreshPositions) {
         onRefreshPositions();
@@ -414,6 +432,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     setEditAmount(position.amountUsd.toString());
     setEditNotes(position.notes || '');
     setEditFixedApy(position.fixedApy?.toString() || '');
+    setEditIsShareBased(position.isShareBased || false);
   };
 
   const handleSaveEdit = async () => {
@@ -430,6 +449,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         amountUsd: amount,
         notes: editNotes || undefined,
         fixedApy: fixedApyValue === null ? undefined : (isNaN(fixedApyValue) ? undefined : fixedApyValue),
+        isShareBased: editIsShareBased,
       });
       if (onRefreshPositions) {
         await onRefreshPositions();
@@ -506,6 +526,34 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
           }
         } catch (err) {
           console.error('Failed to fetch transaction history:', poolId, err);
+        }
+
+        // If share-based vault, get underlying value via convertToAssets
+        if (position.isShareBased) {
+          try {
+            // Convert balance to raw BigInt (assuming 6 decimals for USDC-based vaults)
+            const decimals = 6; // Most stablecoin vaults use 6 decimals
+            const sharesRaw = BigInt(Math.round(result.balance * (10 ** decimals)));
+
+            const vaultResult = await getVaultUnderlyingValue(
+              position.tokenAddress,
+              sharesRaw,
+              pool.chain
+            );
+
+            if (vaultResult) {
+              updates.underlyingValue = vaultResult.underlyingValue;
+              // Use underlying value for USD amount (assuming stablecoin = $1)
+              updates.amountUsd = vaultResult.underlyingValue;
+              console.log('[Share-based Vault]', position.tokenSymbol, {
+                shares: result.balance,
+                underlyingValue: vaultResult.underlyingValue,
+                yield: vaultResult.underlyingValue - (updates.initialTokenBalance || result.balance),
+              });
+            }
+          } catch (err) {
+            console.error('Failed to get vault underlying value:', poolId, err);
+          }
         }
 
         await updatePositionInDb(poolId, updates);
@@ -819,6 +867,23 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                             />
                           </div>
                         </div>
+                        {/* Share-based vault toggle - only show for wallet positions */}
+                        {position.source === 'wallet' && (
+                          <div className="mt-3 p-3 bg-slate-700/50 rounded-lg">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={editIsShareBased}
+                                onChange={(e) => setEditIsShareBased(e.target.checked)}
+                                className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-cyan-500 focus:ring-cyan-500"
+                              />
+                              <div>
+                                <div className="text-sm text-slate-300">Share-based vault (ERC-4626)</div>
+                                <div className="text-xs text-slate-500">Enable to calculate yield from underlying value, not token balance</div>
+                              </div>
+                            </label>
+                          </div>
+                        )}
                         {editFixedApy && (
                           <div className="text-xs text-purple-400 mt-2">
                             Fixed APY will be used for portfolio calculations instead of the live rate ({pool.apy.toFixed(2)}%)
