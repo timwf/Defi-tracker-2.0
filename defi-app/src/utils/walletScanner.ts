@@ -337,23 +337,48 @@ export async function getVaultUnderlyingValue(
 
     const underlyingRaw = BigInt(data.result);
 
-    // Get underlying token decimals by calling asset() then getting metadata
-    // For now, assume same decimals as shares (common for stablecoin vaults)
-    // We can enhance this later to call asset() if needed
-    const metadata = await getTokenMetadata(vaultAddress, chain);
-    const decimals = metadata.decimals ?? 6; // Default to 6 for USDC-based vaults
+    // Get the underlying asset address by calling asset()
+    // Function selector for asset(): 0x38d52e0f
+    let underlyingDecimals = 6; // Default for USDC
+    try {
+      const assetResponse = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_call',
+          params: [{
+            to: vaultAddress,
+            data: '0x38d52e0f', // asset()
+          }, 'latest'],
+          id: 2,
+        }),
+      });
 
-    const underlyingValue = formatBalance(underlyingRaw, decimals);
+      if (assetResponse.ok) {
+        const assetData = await assetResponse.json();
+        if (assetData.result && assetData.result !== '0x') {
+          // Extract address from the 32-byte response (last 20 bytes)
+          const underlyingAddress = '0x' + assetData.result.slice(-40);
+          const underlyingMetadata = await getTokenMetadata(underlyingAddress, chain);
+          underlyingDecimals = underlyingMetadata.decimals ?? 6;
+        }
+      }
+    } catch {
+      // Fall back to default decimals
+    }
+
+    const underlyingValue = formatBalance(underlyingRaw, underlyingDecimals);
 
     console.log('[convertToAssets]', {
       vaultAddress,
       sharesBalance: sharesBalance.toString(),
       underlyingRaw: underlyingRaw.toString(),
       underlyingValue,
-      decimals,
+      underlyingDecimals,
     });
 
-    return { underlyingValue, underlyingDecimals: decimals };
+    return { underlyingValue, underlyingDecimals };
   } catch (err) {
     console.error('[convertToAssets] Error:', err);
     return null;
@@ -674,7 +699,7 @@ export async function refreshTokenBalance(
   walletAddress: string,
   tokenAddress: string,
   chain: string
-): Promise<{ balance: number; symbol: string | null; usdValue: number | null } | null> {
+): Promise<{ balance: number; balanceRaw: bigint; decimals: number; symbol: string | null; usdValue: number | null } | null> {
   if (!CHAIN_CONFIG[chain]) return null;
 
   try {
@@ -724,6 +749,8 @@ export async function refreshTokenBalance(
 
     return {
       balance,
+      balanceRaw: balanceRaw,
+      decimals,
       symbol: metadata.symbol,
       usdValue: price ? balance * price : null,
     };

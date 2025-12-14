@@ -226,6 +226,8 @@ export async function updatePositionInDb(
   if ('isShareBased' in updates) updateData.is_share_based = updates.isShareBased ?? null;
   if (updates.underlyingValue !== undefined) updateData.underlying_value = updates.underlyingValue;
 
+  console.log('[DB Update]', poolId, updateData);
+
   const { error } = await supabase
     .from('positions')
     .update(updateData)

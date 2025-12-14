@@ -307,13 +307,9 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
               // If share-based vault, get underlying value via convertToAssets
               if (pos.isShareBased) {
                 try {
-                  // Convert balance to raw BigInt (assuming 6 decimals for USDC-based vaults)
-                  const decimals = 6; // Most stablecoin vaults use 6 decimals
-                  const sharesRaw = BigInt(Math.round(result.balance * (10 ** decimals)));
-
                   const vaultResult = await getVaultUnderlyingValue(
                     pos.tokenAddress,
-                    sharesRaw,
+                    result.balanceRaw,
                     pool.chain
                   );
 
@@ -323,6 +319,8 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                     updates.amountUsd = vaultResult.underlyingValue;
                     console.log(`[Share-based Vault - Auto] ${result.symbol || pos.tokenSymbol}`, {
                       shares: result.balance,
+                      sharesRaw: result.balanceRaw.toString(),
+                      decimals: result.decimals,
                       underlyingValue: vaultResult.underlyingValue,
                       yield: vaultResult.underlyingValue - (updates.initialTokenBalance || result.balance),
                     });
@@ -472,14 +470,22 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     // If empty string, explicitly set to undefined to clear the fixed APY
     const fixedApyValue = editFixedApy.trim() === '' ? null : parseFloat(editFixedApy);
 
+    console.log('[Save Edit]', {
+      poolId: editingId,
+      isShareBased: editIsShareBased,
+      amount,
+      fixedApy: fixedApyValue,
+    });
+
     setSaving(true);
     try {
-      await updatePositionInDb(editingId, {
+      const success = await updatePositionInDb(editingId, {
         amountUsd: amount,
         notes: editNotes || undefined,
         fixedApy: fixedApyValue === null ? undefined : (isNaN(fixedApyValue) ? undefined : fixedApyValue),
         isShareBased: editIsShareBased,
       });
+      console.log('[Save Edit] Result:', success);
       if (onRefreshPositions) {
         await onRefreshPositions();
       }
@@ -560,13 +566,9 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         // If share-based vault, get underlying value via convertToAssets
         if (position.isShareBased) {
           try {
-            // Convert balance to raw BigInt (assuming 6 decimals for USDC-based vaults)
-            const decimals = 6; // Most stablecoin vaults use 6 decimals
-            const sharesRaw = BigInt(Math.round(result.balance * (10 ** decimals)));
-
             const vaultResult = await getVaultUnderlyingValue(
               position.tokenAddress,
-              sharesRaw,
+              result.balanceRaw,
               pool.chain
             );
 
@@ -576,6 +578,8 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
               updates.amountUsd = vaultResult.underlyingValue;
               console.log('[Share-based Vault]', position.tokenSymbol, {
                 shares: result.balance,
+                sharesRaw: result.balanceRaw.toString(),
+                decimals: result.decimals,
                 underlyingValue: vaultResult.underlyingValue,
                 yield: vaultResult.underlyingValue - (updates.initialTokenBalance || result.balance),
               });
