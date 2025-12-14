@@ -24,7 +24,7 @@ Most yield aggregators only show current APY/TVL. This tool surfaces historical 
 - Direct links to DefiLlama for each pool
 
 ### Advanced Filtering
-- Multi-chain filter (Ethereum, Arbitrum, Base, Optimism, etc.)
+- Multi-chain filter (Ethereum, Arbitrum, Base, Optimism, Polygon, etc.)
 - Multi-protocol filter (Aave, Uniswap, Curve, Pendle, etc.)
 - Token symbol filter
 - Stablecoin-only toggle
@@ -41,9 +41,26 @@ Most yield aggregators only show current APY/TVL. This tool surfaces historical 
 
 ### Portfolio Tracking
 - Add positions with amount, entry date, and notes
+- Fixed APY override for fixed-rate products (e.g., Pendle PT tokens)
 - Dedicated portfolio page with analytics
 - Total value, weighted APY, projected earnings (daily/monthly/annual)
 - Allocation breakdown by pool, chain, and asset type
+- APY sparklines and historical trends per position
+
+### Wallet Integration
+- Scan Ethereum addresses across multiple chains (Ethereum, Arbitrum, Polygon, Optimism, Base)
+- Auto-detect wallet token balances via Alchemy API
+- USD price fetching via DeFiLlama API
+- Auto-refresh token balances on page load
+- Unmapped positions list for tokens not yet linked to pools
+- Link wallet tokens to tracked DeFi pools
+
+### Price Watchlist
+- Track crypto prices in real-time (default: ETH, BTC, SOL)
+- Add/remove coins to watchlist
+- CoinGecko API integration with 30-second auto-refresh
+- 24h and 7d price change indicators
+- Market cap and rank display
 
 ### Risk Alerts
 - APY drop warnings (vs 90-day average)
@@ -52,12 +69,18 @@ Most yield aggregators only show current APY/TVL. This tool surfaces historical 
 - High volatility warnings
 
 ### Data Export
-- JSON export with all metrics
-- AI-optimized format for analysis
+- JSON export with all portfolio metrics
+- AI-optimized export with pre-built analysis prompts:
+  - Find Opportunities
+  - Review Portfolio
+  - Top 10 Pools
+  - Verify High APY
+  - Custom prompts
+- Full portfolio snapshot including positions, allocations, and risk metrics
 
 ### Authentication & Sync
 - Email/password auth via Supabase
-- Cloud sync for positions and saved views
+- Cloud sync for positions, saved views, and unmapped positions
 - Works fully offline with localStorage fallback
 - Auto-migration to cloud on first login
 
@@ -69,7 +92,9 @@ Most yield aggregators only show current APY/TVL. This tool surfaces historical 
 - Vite
 - Tailwind CSS
 - Supabase (auth + PostgreSQL)
-- DefiLlama API
+- DefiLlama API (pools + token prices)
+- Alchemy API (wallet scanning)
+- CoinGecko API (price watchlist)
 - Vercel Analytics
 
 ---
@@ -82,9 +107,10 @@ npm install
 npm run dev
 ```
 
-Create a `.env` file with your Supabase credentials:
+Create a `.env` file with your credentials:
 
 ```
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_anon_key
+VITE_ALCHEMY_API_KEY=your_alchemy_key
 ```

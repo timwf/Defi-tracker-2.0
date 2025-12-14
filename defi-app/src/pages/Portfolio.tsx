@@ -3,7 +3,8 @@ import type { Pool, HeldPosition, CalculatedMetrics, UnmappedPosition } from '..
 import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../utils/heldPositions';
 import { getCachedData, getPoolMetrics, fetchPoolHistoryWithCache, isCacheValid } from '../utils/historicalData';
 import { fetchUnmappedPositions } from '../utils/unmappedPositions';
-import { refreshTokenBalance } from '../utils/walletScanner';
+import { refreshTokenBalance, getAllTokenTransfers } from '../utils/walletScanner';
+import { downloadPortfolioJson } from '../utils/exportPortfolio';
 import { formatTvl } from '../utils/filterPools';
 import { MetricInfo } from '../components/MetricInfo';
 import { PoolSearchInput } from '../components/PoolSearchInput';
@@ -255,11 +256,36 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
             );
 
             if (result) {
-              await updatePositionInDb(pos.poolId, {
+              const updates: Parameters<typeof updatePositionInDb>[1] = {
                 tokenBalance: result.balance,
                 tokenSymbol: result.symbol || pos.tokenSymbol,
                 amountUsd: result.usdValue ?? pos.amountUsd,
-              });
+              };
+
+              // Fetch full transaction history if not already present
+              if (!pos.transactions || pos.transactions.length === 0) {
+                try {
+                  const txData = await getAllTokenTransfers(
+                    pos.walletAddress,
+                    pos.tokenAddress,
+                    pool.chain
+                  );
+                  if (txData) {
+                    updates.firstAcquiredAt = txData.firstAcquiredAt;
+                    updates.transactions = txData.transactions;
+                    updates.totalCostBasis = txData.totalCostBasis;
+                    updates.avgEntryPrice = txData.avgEntryPrice;
+                    // Also set legacy fields for backward compatibility
+                    updates.initialTokenBalance = txData.totalDeposited;
+                    updates.initialAmountUsd = txData.totalCostBasis;
+                    updates.entryPriceUsd = txData.avgEntryPrice;
+                  }
+                } catch (err) {
+                  console.error('Failed to fetch transaction history:', pos.poolId, err);
+                }
+              }
+
+              await updatePositionInDb(pos.poolId, updates);
             }
           } catch (err) {
             console.error('Failed to refresh wallet position:', pos.poolId, err);
@@ -477,6 +503,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     return `$${value.toFixed(2)}`;
   };
 
+  const handleExportJson = () => {
+    downloadPortfolioJson(positions, pools, unmappedPositions);
+  };
+
   return (
     <div className="space-y-6">
       {/* Orphaned positions warning */}
@@ -534,6 +564,21 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
           Refreshing wallet balances... {walletRefreshProgress.current}/{walletRefreshProgress.total} positions
         </div>
       )}
+
+      {/* Header with Export */}
+      <div className="flex justify-end">
+        <button
+          onClick={handleExportJson}
+          disabled={positions.length === 0}
+          className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Export portfolio as JSON"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Export JSON
+        </button>
+      </div>
 
       {/* Summary Bar */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">

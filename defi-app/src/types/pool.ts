@@ -91,6 +91,16 @@ export interface CalculatedMetrics {
   oldestDate: string;
 }
 
+// Transaction record for cost basis tracking
+export interface TokenTransaction {
+  timestamp: number;
+  amount: number;        // token amount
+  priceUsd: number | null; // price at time of transaction
+  valueUsd: number | null; // amount * priceUsd
+  type: 'deposit' | 'withdrawal';
+  txHash?: string;
+}
+
 // User's held positions
 export interface HeldPosition {
   poolId: string;
@@ -104,6 +114,15 @@ export interface HeldPosition {
   tokenAddress?: string; // Token contract address for wallet imports
   tokenBalance?: number; // Raw token quantity (for wallet imports)
   tokenSymbol?: string; // Token symbol (for wallet imports)
+  // Entry tracking (from blockchain)
+  firstAcquiredAt?: number; // Timestamp of first transfer to wallet
+  entryPriceUsd?: number; // USD price of token at first acquisition
+  initialAmountUsd?: number; // Initial USD value at acquisition
+  initialTokenBalance?: number; // Initial token quantity at first acquisition
+  // Full transaction history for accurate cost basis
+  transactions?: TokenTransaction[];
+  totalCostBasis?: number;      // sum of all deposit values
+  avgEntryPrice?: number;       // totalCostBasis / total tokens deposited
 }
 
 // Scanned token from wallet

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Pool, CalculatedMetrics, HeldPosition } from '../types/pool';
 import { getCachedData, getPoolMetrics } from '../utils/historicalData';
 import { formatTvl, formatApy, formatChange, formatSigma } from '../utils/filterPools';
@@ -102,6 +103,7 @@ export function PoolInfoCard({
   isRefreshing = false,
   alerts = [],
 }: PoolInfoCardProps) {
+  const [showTransactionHistory, setShowTransactionHistory] = useState(false);
   const metrics: CalculatedMetrics | null = getPoolMetrics(pool.pool);
   const cachedData = getCachedData(pool.pool);
   const hasHistoricalData = cachedData !== null;
@@ -503,6 +505,126 @@ export function PoolInfoCard({
               </div>
             </div>
           </div>
+
+          {/* Entry Data Section */}
+          {(position.firstAcquiredAt || position.entryDate || position.transactions) && (
+            <div className="mt-4 pt-3 border-t border-slate-700/50">
+              <div className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-2">Entry Info</div>
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <div className="text-slate-500 text-xs">Acquired</div>
+                  <div className="text-slate-300">
+                    {position.firstAcquiredAt
+                      ? new Date(position.firstAcquiredAt).toLocaleDateString()
+                      : position.entryDate
+                      ? new Date(position.entryDate).toLocaleDateString()
+                      : '-'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-500 text-xs">{position.transactions && position.transactions.length > 1 ? 'Avg Price' : 'Entry Price'}</div>
+                  <div className="text-slate-300">
+                    {position.avgEntryPrice
+                      ? `$${position.avgEntryPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
+                      : position.entryPriceUsd
+                      ? `$${position.entryPriceUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
+                      : '-'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-500 text-xs">Gain/Loss</div>
+                  {(position.totalCostBasis || position.initialAmountUsd) && position.amountUsd ? (
+                    (() => {
+                      const costBasis = position.totalCostBasis ?? position.initialAmountUsd ?? 0;
+                      const gain = position.amountUsd - costBasis;
+                      const gainPct = costBasis > 0 ? ((gain / costBasis) * 100) : 0;
+                      const isPositive = gain >= 0;
+                      return (
+                        <div className={isPositive ? 'text-green-400' : 'text-red-400'}>
+                          {isPositive ? '+' : ''}{formatCurrency(gain)}
+                          <span className="text-xs ml-1">({isPositive ? '+' : ''}{gainPct.toFixed(1)}%)</span>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <div className="text-slate-500">-</div>
+                  )}
+                </div>
+              </div>
+              {(position.totalCostBasis || position.initialAmountUsd) && (
+                <div className="text-xs text-slate-500 mt-2">
+                  Cost Basis: {formatCurrency(position.totalCostBasis ?? position.initialAmountUsd ?? 0)}
+                  {position.transactions && position.transactions.length > 1 && (
+                    <span className="ml-1">({position.transactions.length} deposits)</span>
+                  )}
+                  {position.firstAcquiredAt && (
+                    <span className="ml-2">
+                      · Held {Math.floor((Date.now() - position.firstAcquiredAt) / (1000 * 60 * 60 * 24))} days
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Expandable Transaction History */}
+              {position.transactions && position.transactions.length > 0 && (
+                <div className="mt-3">
+                  <button
+                    onClick={() => setShowTransactionHistory(!showTransactionHistory)}
+                    className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                  >
+                    {showTransactionHistory ? 'Hide' : 'Show'} Transaction History
+                    <svg
+                      className={`w-3 h-3 transition-transform ${showTransactionHistory ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {showTransactionHistory && (
+                    <div className="mt-2 bg-slate-900/50 rounded-lg p-3">
+                      <div className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-2">Deposit History</div>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {position.transactions.map((tx, i) => (
+                          <div key={i} className="flex justify-between items-center text-xs border-b border-slate-700/50 pb-2">
+                            <div className="flex-1">
+                              <div className="text-slate-400">{new Date(tx.timestamp).toLocaleDateString()}</div>
+                              <div className="text-slate-500 text-[10px]">
+                                {tx.txHash && (
+                                  <span className="font-mono">{tx.txHash.slice(0, 8)}...{tx.txHash.slice(-6)}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-slate-300">
+                                {tx.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {position.tokenSymbol}
+                              </div>
+                              <div className="text-slate-500">
+                                @ ${tx.priceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) ?? '-'}
+                              </div>
+                            </div>
+                            <div className="text-right ml-3 min-w-[60px]">
+                              <div className="text-slate-300">
+                                {tx.valueUsd ? formatCurrency(tx.valueUsd) : '-'}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-slate-700 flex justify-between text-xs">
+                        <span className="text-slate-400">Total Invested</span>
+                        <span className="text-slate-300 font-medium">
+                          {formatCurrency(position.totalCostBasis ?? position.transactions.reduce((sum, tx) => sum + (tx.valueUsd ?? 0), 0))}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {position.notes && (
             <div className="mt-3 text-sm">

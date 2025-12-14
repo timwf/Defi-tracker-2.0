@@ -1,4 +1,4 @@
-import type { ScannedToken } from '../types/pool';
+import type { ScannedToken, TokenTransaction } from '../types/pool';
 
 // Chain configurations for Alchemy API
 const CHAIN_CONFIG: Record<string, { alchemyNetwork: string; nativeSymbol: string; nativeName: string; coingeckoId: string }> = {
@@ -337,6 +337,222 @@ export async function scanWalletTokens(
 
 export function isValidEthAddress(address: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(address);
+}
+
+// Interface for transfer history
+interface AssetTransfer {
+  blockNum: string;
+  from: string;
+  to: string;
+  value: number | null;
+  asset: string | null;
+  hash: string;
+  metadata: {
+    blockTimestamp: string;
+  };
+}
+
+// Fetch the first transfer of a token to a wallet (for entry date tracking)
+export async function getFirstTokenTransfer(
+  walletAddress: string,
+  tokenAddress: string,
+  chain: string
+): Promise<{ timestamp: number; amount: number } | null> {
+  if (!CHAIN_CONFIG[chain]) return null;
+
+  try {
+    const url = getAlchemyUrl(chain);
+
+    // Fetch incoming transfers for this token to the wallet
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'alchemy_getAssetTransfers',
+        params: [{
+          fromBlock: '0x0',
+          toBlock: 'latest',
+          toAddress: walletAddress,
+          contractAddresses: [tokenAddress],
+          category: ['erc20'],
+          withMetadata: true,
+          order: 'asc', // Oldest first
+          maxCount: '0x1', // Only need the first one
+        }],
+        id: 1,
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const transfers: AssetTransfer[] = data.result?.transfers || [];
+
+    if (transfers.length === 0) return null;
+
+    const firstTransfer = transfers[0];
+    const timestamp = new Date(firstTransfer.metadata.blockTimestamp).getTime();
+    const amount = firstTransfer.value ?? 0;
+
+    return { timestamp, amount };
+  } catch (err) {
+    console.error('Error fetching first transfer:', err);
+    return null;
+  }
+}
+
+// Fetch historical token price from DeFiLlama
+export async function fetchHistoricalPrice(
+  tokenAddress: string,
+  chain: string,
+  timestamp: number
+): Promise<number | null> {
+  const llamaChain = DEFILLAMA_CHAINS[chain];
+  if (!llamaChain) return null;
+
+  // Convert timestamp to seconds for DeFiLlama API
+  const timestampSeconds = Math.floor(timestamp / 1000);
+  const coin = `${llamaChain}:${tokenAddress.toLowerCase()}`;
+
+  try {
+    const response = await fetch(
+      `https://coins.llama.fi/prices/historical/${timestampSeconds}/${coin}`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const price = data.coins?.[coin]?.price;
+
+    return typeof price === 'number' ? price : null;
+  } catch (err) {
+    console.error('Error fetching historical price:', err);
+    return null;
+  }
+}
+
+// Get entry data for a token (first transfer date, price at that time)
+export async function getTokenEntryData(
+  walletAddress: string,
+  tokenAddress: string,
+  chain: string
+): Promise<{
+  firstAcquiredAt: number;
+  entryPriceUsd: number | null;
+  initialTokenBalance: number;
+  initialAmountUsd: number | null;
+} | null> {
+  const firstTransfer = await getFirstTokenTransfer(walletAddress, tokenAddress, chain);
+
+  if (!firstTransfer) return null;
+
+  const entryPriceUsd = await fetchHistoricalPrice(
+    tokenAddress,
+    chain,
+    firstTransfer.timestamp
+  );
+
+  return {
+    firstAcquiredAt: firstTransfer.timestamp,
+    entryPriceUsd,
+    initialTokenBalance: firstTransfer.amount,
+    initialAmountUsd: entryPriceUsd ? firstTransfer.amount * entryPriceUsd : null,
+  };
+}
+
+// Get ALL token transfers with full cost basis calculation
+export async function getAllTokenTransfers(
+  walletAddress: string,
+  tokenAddress: string,
+  chain: string
+): Promise<{
+  transactions: TokenTransaction[];
+  totalCostBasis: number;
+  avgEntryPrice: number;
+  firstAcquiredAt: number;
+  totalDeposited: number;
+} | null> {
+  if (!CHAIN_CONFIG[chain]) return null;
+
+  try {
+    const url = getAlchemyUrl(chain);
+
+    // Fetch ALL incoming transfers (deposits)
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'alchemy_getAssetTransfers',
+        params: [{
+          fromBlock: '0x0',
+          toBlock: 'latest',
+          toAddress: walletAddress,
+          contractAddresses: [tokenAddress],
+          category: ['erc20'],
+          withMetadata: true,
+          order: 'asc', // Oldest first
+        }],
+        id: 1,
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const transfers: AssetTransfer[] = data.result?.transfers || [];
+
+    if (transfers.length === 0) return null;
+
+    // Build transaction list with historical prices
+    const transactions: TokenTransaction[] = [];
+    let totalCostBasis = 0;
+    let totalDeposited = 0;
+
+    for (const transfer of transfers) {
+      const timestamp = new Date(transfer.metadata.blockTimestamp).getTime();
+      const amount = transfer.value ?? 0;
+
+      // Fetch historical price for this transaction
+      // Add small delay to avoid rate limiting
+      if (transactions.length > 0) {
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      const priceUsd = await fetchHistoricalPrice(tokenAddress, chain, timestamp);
+      const valueUsd = priceUsd ? amount * priceUsd : null;
+
+      transactions.push({
+        timestamp,
+        amount,
+        priceUsd,
+        valueUsd,
+        type: 'deposit',
+        txHash: transfer.hash,
+      });
+
+      if (valueUsd) {
+        totalCostBasis += valueUsd;
+      }
+      totalDeposited += amount;
+    }
+
+    const firstAcquiredAt = transactions[0]?.timestamp ?? 0;
+    const avgEntryPrice = totalDeposited > 0 ? totalCostBasis / totalDeposited : 0;
+
+    return {
+      transactions,
+      totalCostBasis,
+      avgEntryPrice,
+      firstAcquiredAt,
+      totalDeposited,
+    };
+  } catch (err) {
+    console.error('Error fetching all transfers:', err);
+    return null;
+  }
 }
 
 // Refresh a single token's balance and price

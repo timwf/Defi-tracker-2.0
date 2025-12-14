@@ -108,6 +108,13 @@ export async function fetchPositions(): Promise<HeldPosition[]> {
     tokenAddress: row.token_address || undefined,
     tokenBalance: row.token_balance ? Number(row.token_balance) : undefined,
     tokenSymbol: row.token_symbol || undefined,
+    firstAcquiredAt: row.first_acquired_at ? new Date(row.first_acquired_at).getTime() : undefined,
+    entryPriceUsd: row.entry_price_usd ? Number(row.entry_price_usd) : undefined,
+    initialAmountUsd: row.initial_amount_usd ? Number(row.initial_amount_usd) : undefined,
+    initialTokenBalance: row.initial_token_balance ? Number(row.initial_token_balance) : undefined,
+    transactions: row.transactions || undefined,
+    totalCostBasis: row.total_cost_basis ? Number(row.total_cost_basis) : undefined,
+    avgEntryPrice: row.avg_entry_price ? Number(row.avg_entry_price) : undefined,
   }));
 }
 
@@ -207,6 +214,13 @@ export async function updatePositionInDb(
   if ('fixedApy' in updates) updateData.fixed_apy = updates.fixedApy ?? null;
   if (updates.tokenBalance !== undefined) updateData.token_balance = updates.tokenBalance;
   if (updates.tokenSymbol !== undefined) updateData.token_symbol = updates.tokenSymbol || null;
+  if (updates.firstAcquiredAt !== undefined) updateData.first_acquired_at = new Date(updates.firstAcquiredAt).toISOString();
+  if (updates.entryPriceUsd !== undefined) updateData.entry_price_usd = updates.entryPriceUsd;
+  if (updates.initialAmountUsd !== undefined) updateData.initial_amount_usd = updates.initialAmountUsd;
+  if (updates.initialTokenBalance !== undefined) updateData.initial_token_balance = updates.initialTokenBalance;
+  if (updates.transactions !== undefined) updateData.transactions = updates.transactions;
+  if (updates.totalCostBasis !== undefined) updateData.total_cost_basis = updates.totalCostBasis;
+  if (updates.avgEntryPrice !== undefined) updateData.avg_entry_price = updates.avgEntryPrice;
 
   const { error } = await supabase
     .from('positions')
