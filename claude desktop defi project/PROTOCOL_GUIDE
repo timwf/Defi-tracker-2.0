@@ -1,0 +1,630 @@
+# Protocol Interaction Guide
+
+**Networks:** Arbitrum One only  
+**Required:** MetaMask wallet, ETH for gas  
+**Security:** Always verify network, never share seed phrase  
+**On-ramp:** Revolt â†’ Kraken â†’ Arbitrum wallets
+
+---
+
+## On-Ramp: Revolt â†’ Kraken â†’ Wallet
+
+### Step 1: Transfer GBP to Kraken
+
+1. Log into Revolt app
+2. Go to Payments â†’ Send
+3. Enter Kraken's GBP deposit details (from Kraken â†’ Funding â†’ Deposit â†’ GBP)
+4. Enter amount (e.g., Â£1,500)
+5. Confirm transfer
+6. Wait 1-2 hours for arrival
+
+**Cost:** Free
+
+### Step 2: Buy USDC or ETH on Kraken
+
+1. Log into Kraken
+2. Go to Buy Crypto or Trade
+3. Select pair: USDC/GBP or ETH/GBP
+4. Enter amount (e.g., Â£1,500)
+5. Review order (market order recommended)
+6. Confirm purchase
+7. Wait 1-5 minutes for settlement
+
+**Cost:** ~0.16-0.26% trading fee
+
+### Step 3: Withdraw to Arbitrum Wallet
+
+1. Go to Funding â†’ Withdraw
+2. Select cryptocurrency (USDC or ETH)
+3. **Select Network: Arbitrum** (CRITICAL - wrong network = lost funds)
+4. Enter wallet address (copy from MetaMask)
+5. Enter amount
+6. Confirm withdrawal (may require 2FA)
+7. Wait 5-15 minutes for confirmation
+8. Check Arbiscan.io with your wallet address to verify
+
+**Cost:** ~$1-2 flat fee
+
+**Total time:** 2-3 hours from Revolt â†’ wallet  
+**Total cost:** ~0.2-0.5% + ~$1-2
+
+---
+
+## Aave v3
+
+**URL:** https://app.aave.com  
+**Type:** Lending protocol  
+**Current APY:** 3.48% on USDC (variable)  
+**Risk:** Low (8+ years operational, 70+ audits)  
+**Target allocation:** 23.3%
+
+### Supply USDC to Aave
+
+1. Go to app.aave.com
+2. Click "Connect Wallet" â†’ MetaMask
+3. **Verify network: Arbitrum** (top right corner)
+4. Find USDC in "Supply" section
+5. Click "Supply"
+6. Enter amount (or click "Max")
+7. Click "Supply USDC"
+8. **First time:** Approve transaction (~$0.01 gas) - Click "Approve"
+9. After approval: Confirm supply transaction (~$0.02 gas)
+10. Wait 30-60 seconds for confirmation
+11. Verify: Check "Your supplies" shows aUSDC balance
+
+**Gas cost:** 
+- First time: ~$0.03 total (approval + supply)
+- Subsequent: ~$0.02 (supply only)
+
+### Withdraw USDC from Aave
+
+1. Go to app.aave.com â†’ Dashboard
+2. Find USDC position in "Your supplies"
+3. Click "Withdraw"
+4. Enter amount (or click "Max")
+5. Click "Withdraw USDC"
+6. Confirm transaction (~$0.02 gas)
+7. Wait 30-60 seconds
+8. Verify: USDC back in wallet
+
+**Withdrawal time:** Instant (10-30 seconds)
+
+### Notes
+
+- Receive aUSDC tokens (auto-compounding receipt)
+- aUSDC balance increases automatically as interest accrues
+- Instant liquidity (can withdraw anytime)
+- APY varies 3-7% based on utilization
+- Check APY weekly (dashboard shows current rate)
+- Most liquid protocol - default for monthly Â£1,500 deposits
+
+---
+
+## Morpho
+
+**URL:** https://app.morpho.org  
+**Type:** Lending optimizer  
+**Current APY:** 7.72% on USDC (Gauntlet USDC Core vault)  
+**Risk:** Medium-low (2+ years operational, multiple audits)  
+**Target allocation:** 23.3%
+
+### Supply USDC to Morpho Vault
+
+1. Go to app.morpho.org
+2. Click "Connect Wallet" â†’ MetaMask
+3. **Verify network: Arbitrum** (top right)
+4. Click "Vaults" in navigation
+5. Filter by: USDC, Arbitrum
+6. Select "Gauntlet USDC Core" vault (or best APY vault with >Â£50M TVL)
+7. Check vault details:
+   - TVL: Should be >Â£50M
+   - APY: 5-8% range
+   - Curator: Gauntlet/MEV Capital/Steakhouse (institutional)
+8. Click "Supply"
+9. Enter USDC amount
+10. Click "Approve USDC" (~$0.01 gas)
+11. After approval: Click "Supply" (~$0.03 gas)
+12. Wait 30-60 seconds
+13. Verify: Position shows in Portfolio
+
+**Gas cost:** 
+- First time: ~$0.04 total
+- Subsequent: ~$0.03
+
+### Withdraw USDC from Morpho
+
+1. Go to app.morpho.org â†’ Portfolio
+2. Find vault position
+3. Click "Withdraw"
+4. Enter amount (or "Max")
+5. Confirm transaction (~$0.03 gas)
+6. Check for withdrawal queue (rare, usually instant)
+7. Wait 30-60 seconds (or up to 24 hours if queue)
+8. Verify: USDC back in wallet
+
+**Withdrawal time:** 
+- Usually instant
+- Occasionally 1-24 hours if withdrawal queue active
+- Check vault details for current queue status
+
+### Notes
+
+- Higher yields than Aave via P2P matching
+- Some vaults have DRIP rewards (check arbitrumdrip.com)
+- Curator manages risk (0-15% performance fee typical)
+- More complex than Aave but institutional-grade
+- Quarterly: Review if better vaults available
+
+---
+
+## Fluid Protocol
+
+**URL:** https://fluid.instadapp.io  
+**Type:** Lending protocol  
+**Expected APY:** 7.21% on USDC  
+**Risk:** Medium (10-12 months operational, multiple audits)  
+**Target allocation:** 23.3%  
+**âš ï¸ Status:** Protocol <2 years old - monthly monitoring required
+
+### Supply USDC to Fluid
+
+1. Go to fluid.instadapp.io
+2. Click "Connect Wallet" â†’ MetaMask
+3. **Verify network: Arbitrum** (check carefully)
+4. Navigate to "Supply" or "Lend" section
+5. Find USDC
+6. Click "Supply"
+7. Enter amount
+8. **First deposit: Start with Â£150 test before scaling**
+9. Click "Approve USDC" (~$0.01-0.02 gas)
+10. After approval: Click "Supply" (~$0.02-0.05 gas)
+11. Wait for confirmation
+12. Verify: Position shows in dashboard
+
+**Gas cost:** ~$0.03-0.07 total
+
+### Withdraw USDC from Fluid
+
+1. Go to fluid.instadapp.io
+2. Find your supply position
+3. Click "Withdraw"
+4. Enter amount
+5. Confirm transaction (~$0.02-0.05 gas)
+6. Verify: USDC back in wallet
+
+**Withdrawal time:** Usually instant
+
+### Monthly Monitoring Checklist
+
+**Required for Fluid (younger protocol):**
+
+1. **Security check:**
+   - Check Discord/Twitter for any incidents
+   - Verify no exploit announcements
+   - Review audit status quarterly
+
+2. **Performance check:**
+   - APY still competitive (6-8% range)
+   - Compare to Aave/Morpho
+   - TVL stable or growing
+
+3. **Community health:**
+   - Active development
+   - Responsive team
+   - No red flags in discussions
+
+**Red flags (consider withdrawal):**
+- Security incident of any kind
+- TVL declining >20%
+- APY drops below 5% sustained
+- Team becomes unresponsive
+- Multiple community concerns
+
+### Notes
+
+- Newer protocol (calculated risk)
+- Competitive APY vs established protocols
+- Only 23.3% allocation = manageable risk
+- Monthly review essential until >18 months operational
+- Started with Â£150 test before scaling
+- Be prepared to migrate to Aave/Morpho if issues arise
+
+---
+
+## wstETH (Lido Wrapped Staked ETH)
+
+**URL:** https://lido.fi  
+**Type:** Liquid staking  
+**APY:** 3.5% (from Ethereum staking rewards)  
+**Risk:** Low (largest liquid staking protocol, $30B+ TVL)  
+**Target allocation:** 30%
+
+### Acquire wstETH
+
+**Method 1: Buy ETH on Kraken, Swap on Arbitrum (Recommended)**
+
+1. Buy ETH on Kraken (see on-ramp section)
+2. Withdraw ETH to Arbitrum wallet
+3. Go to https://app.lido.fi
+4. Connect MetaMask
+5. Select Arbitrum network
+6. Click "Wrap" (if coming from regular stETH)
+7. Or use Uniswap/other DEX to swap ETH â†’ wstETH directly
+8. Enter ETH amount
+9. Approve and confirm swap (~$0.10-0.50 gas)
+10. wstETH appears in wallet
+
+**Method 2: Swap on Aave (Alternative)**
+
+1. Have ETH in wallet on Arbitrum
+2. Go to app.aave.com
+3. Find ETH in assets
+4. Click "Wrap to wstETH" toggle
+5. Enter ETH amount
+6. Confirm transactions
+7. wstETH appears in wallet
+
+**Gas cost:** ~$0.10-0.50 depending on method
+
+### Hold wstETH
+
+**Recommended strategy:** Just hold in wallet
+
+- Earns 3.5% APY automatically through price appreciation
+- wstETH price increases, balance stays same
+- Check value on lido.fi or DeBank
+- **Do NOT supply to lending protocols** (0.33% APY not worth it)
+
+**Why not lend wstETH:**
+- Aave wstETH lending: Only 0.33% APY
+- Complexity not worth minimal yield
+- Simpler to just hold
+- Still earning 3.5% staking rewards
+
+### Convert wstETH to USDC (when needed)
+
+1. Go to Uniswap on Arbitrum or use DEX aggregator
+2. Select wstETH â†’ USDC
+3. Enter amount
+4. Accept 0.05-0.2% slippage
+5. Confirm swap (~$0.20-0.50 gas)
+6. USDC in wallet
+
+**Gas cost:** ~$0.20-0.50
+
+### Notes
+
+- Growth component of portfolio (30% allocation)
+- Earns Ethereum staking rewards passively
+- Price fluctuates with ETH market (accepted volatility)
+- Liquid (can sell anytime)
+- Simplest to just hold in wallet and let it earn
+- Value increases automatically through price appreciation
+
+---
+
+## General Procedures
+
+### Network Verification (CRITICAL)
+
+**Before EVERY transaction:**
+
+1. Check MetaMask shows "Arbitrum One"
+2. Verify Chain ID: 42161
+3. Check RPC URL: https://arb1.arbitrum.io/rpc
+4. If wrong network: 
+   - Click network dropdown in MetaMask
+   - Select "Arbitrum One"
+   - Verify before proceeding
+
+**âš ï¸ WRONG NETWORK = PERMANENTLY LOST FUNDS**
+
+**Common mistakes:**
+- Ethereum Mainnet (Chain ID: 1) âŒ
+- Optimism (Chain ID: 10) âŒ
+- Polygon (Chain ID: 137) âŒ
+- Base (Chain ID: 8453) âŒ
+- **Arbitrum One (Chain ID: 42161) âœ“**
+
+### Transaction Approval Pattern
+
+Most protocols require two transactions:
+
+1. **Approve (First time only):** 
+   - Give protocol permission to access your tokens
+   - Cost: ~$0.01-0.02 gas
+   - Only needed once per protocol per token
+
+2. **Execute:** 
+   - Actually deposit/withdraw tokens
+   - Cost: ~$0.02-0.05 gas
+   - Needed for every transaction
+
+**This is normal security design. Never skip approval.**
+
+### Gas Fee Expectations
+
+**Arbitrum typical costs:**
+- Token approval: $0.01-0.02
+- Supply/Deposit: $0.02-0.05
+- Withdraw: $0.02-0.05
+- Swap (DEX): $0.10-0.50
+
+**Red flags:**
+- Gas fee >$1.00 on Arbitrum â†’ Something wrong, check network
+- Gas fee >$10.00 â†’ Definitely wrong network (probably Ethereum mainnet)
+
+**Gas spike handling:**
+- Arbitrum gas rarely matters (always cheap)
+- If unusually high: Wait 10-15 minutes and retry
+- Never pay >$0.50 for simple supply/withdraw on Arbitrum
+
+### Verification After Transaction
+
+**Standard verification process:**
+
+1. Click transaction notification in MetaMask
+2. Click "View on Arbiscan"
+3. Verify status: "Success" (green checkmark)
+4. Check destination: Protocol contract address
+5. Verify amount transferred correctly
+6. Open protocol dashboard
+7. Confirm position shows correct amount
+8. Check DeBank app for updated portfolio value
+9. Take screenshot for records
+10. Update tracking spreadsheet
+
+**Transaction failed troubleshooting:**
+- Check ETH balance for gas (need >Â£30-50)
+- Verify correct network selected
+- Try increasing gas limit slightly
+- Check protocol Discord for known issues
+
+### Emergency Procedures
+
+**Transaction pending forever:**
+- Usually resolves in 1-2 minutes
+- If >10 minutes: Try "Speed Up" in MetaMask
+- If >30 minutes: Check Arbiscan for tx status
+- Arbitrum rarely has this issue
+
+**Can't withdraw:**
+- Check protocol dashboard for maintenance
+- Verify sufficient balance in position
+- For Morpho: Check for withdrawal queue (rare)
+- Try smaller amount if full balance fails
+- Check Discord for protocol status
+
+**Wallet compromised:**
+- **Immediately withdraw all funds to Wallet 2**
+- Use desktop if mobile compromised (or vice versa)
+- Create new Wallet 1 with entirely new seed phrase
+- Never reuse compromised wallet
+- Review how compromise occurred (phishing link, malware, etc.)
+
+---
+
+## Protocol Selection Priority
+
+### Primary Use Cases
+
+**Aave (23.3%):**
+- Monthly Â£1,500 deposits â†’ Always goes here first
+- Most liquid for emergency access
+- Most conservative/safest option
+- 3-5% APY range
+
+**Morpho (23.3%):**
+- Enhanced yield (5-8% APY)
+- Quarterly rebalancing destination
+- Institutional curator oversight
+- Good risk/reward balance
+
+**Fluid (23.3%):**
+- Highest stable yield (6-8% APY)
+- Monthly monitoring required
+- Test small before scaling
+- Be prepared to exit if issues
+
+**wstETH (30%):**
+- Growth component
+- Just hold in wallet
+- 3.5% APY + price appreciation
+- Liquid but plan to hold long-term
+
+### Decision Tree
+
+**For monthly Â£1,500 deposit:**
+â†’ Always Aave (simplifies workflow)
+
+**For rebalancing:**
+â†’ Check allocation drift â†’ Move from overweight to underweight
+
+**For new capital (>Â£1,500):**
+â†’ Follow target allocation (equal splits for stablecoins, 30% wstETH)
+
+**If protocol has issue:**
+â†’ Pause deposits â†’ Assess â†’ Withdraw if severe â†’ Redistribute to remaining protocols
+
+---
+
+## Monitoring Tools
+
+### Portfolio Tracking
+
+**DeBank (Primary):**
+- Download app on phone
+- Add wallet addresses
+- Shows all positions across protocols
+- Real-time value updates
+- Transaction history
+- Free to use
+
+**Protocol Dashboards:**
+- Aave: app.aave.com/dashboard
+- Morpho: app.morpho.org/portfolio
+- Fluid: fluid.instadapp.io/dashboard
+- Each shows individual positions only
+
+**Blockchain Explorer:**
+- Arbiscan.io
+- Enter wallet address
+- Verify all transactions
+- Check transaction status
+- Review gas costs
+- View wallet activity history
+
+### APY Tracking
+
+**DeFiLlama:**
+- https://defillama.com/yields
+- Compare rates across all protocols
+- Historical APY data
+- Filter by Arbitrum + stablecoins
+- Use for research/comparison
+
+**Direct from protocols:**
+- Most accurate real-time APYs
+- Check protocol dashboards weekly
+- Record in spreadsheet monthly
+
+### Security Monitoring
+
+**Protocol Socials:**
+- Aave Discord: https://aave.com/discord
+- Morpho Discord: https://morpho.org/discord
+- Fluid Twitter: https://twitter.com/Fluid_Lending (check for official handle)
+- Arbitrum Discord: https://discord.gg/arbitrum
+
+**Set up alerts:**
+- Join Discord servers
+- Enable notifications for announcements channels
+- Check Twitter daily if using Fluid (younger protocol)
+
+---
+
+## Common Errors & Solutions
+
+### "Insufficient funds for gas"
+**Problem:** Not enough ETH in wallet  
+**Solution:** Keep Â£30-50 ETH in Wallet 1, Â£20-30 in Wallet 2  
+**Prevention:** Check ETH balance before starting transactions
+
+### "Transaction will revert"
+**Problem:** Protocol limits reached or liquidity issue  
+**Solution:** Reduce amount by 1-2% and retry  
+**Note:** Rare on Arbitrum, usually resolves quickly
+
+### "Wrong network"
+**Problem:** Not on Arbitrum One  
+**Solution:** Click network dropdown â†’ Select Arbitrum One  
+**Prevention:** ALWAYS verify before every transaction
+
+### "Approval required"
+**Problem:** First time using protocol needs token approval  
+**Solution:** Click "Approve" first (~$0.01), then supply/deposit  
+**Note:** This is normal, required once per protocol per token
+
+### "Slippage too high"
+**Problem:** Price movement during swap  
+**Solution:** Accept higher slippage (0.5-1%) or try smaller amount  
+**Note:** Usually only happens on wstETH swaps, not USDC deposits
+
+### "Kraken withdrawal pending"
+**Problem:** Waiting for blockchain confirmation  
+**Solution:** Wait 5-15 minutes, check Arbiscan with wallet address  
+**Prevention:** Normal, nothing to prevent
+
+### "MetaMask stuck on pending"
+**Problem:** Transaction not confirming  
+**Solution:** Click transaction â†’ "Speed Up" â†’ Increase gas  
+**Note:** Rare on Arbitrum, usually resolves in 1-2 minutes
+
+---
+
+## Security Best Practices
+
+### Seed Phrase Management
+
+**DO:**
+- Write on paper only
+- Store 3+ copies in separate physical locations
+- Verify backups periodically (quarterly)
+- Keep locked/hidden
+
+**DON'T:**
+- Take photos
+- Store digitally (no cloud, no password manager)
+- Email or message
+- Store all copies in same location
+
+### Transaction Verification
+
+**Before EVERY transaction:**
+- Verify network: Arbitrum One (Chain ID: 42161)
+- Check recipient address
+- Confirm amount correct
+- Review gas fee reasonable
+
+**After EVERY transaction:**
+- Verify on Arbiscan (green checkmark)
+- Confirm position in protocol dashboard
+- Check DeBank updated correctly
+- Screenshot for records
+
+### Wallet Hygiene
+
+**Do regularly:**
+- Review approved contracts (Settings â†’ Security)
+- Revoke unused approvals
+- Check transaction history for anomalies
+- Clear browser cache after sessions
+
+**Do never:**
+- Share seed phrase with anyone
+- Enter seed phrase in browser
+- Connect to unknown/untrusted dApps
+- Click random Discord/Twitter links
+
+### Phishing Prevention
+
+**Official URLs only:**
+- app.aave.com
+- app.morpho.org
+- fluid.instadapp.io
+- lido.fi
+
+**Red flags:**
+- "aave-app.com" (wrong)
+- "morpho.io" instead of ".org" (wrong)
+- "app-lido.com" (wrong)
+- Discord DMs offering "support"
+- "Verify your wallet" messages
+
+**Always:**
+- Bookmark official sites
+- Type URLs manually or use bookmarks
+- Never click links in Discord DMs
+- Verify URL before connecting wallet
+
+---
+
+## Protocol Comparison Quick Reference
+
+| Feature | Aave | Morpho | Fluid | wstETH |
+|---------|------|--------|-------|--------|
+| **Type** | Lending | Optimizer | Lending | Staking |
+| **APY** | 3-5% | 5-8% | 6-8% | 3.5% |
+| **Risk** | Low | Med-Low | Medium | Low |
+| **Liquidity** | Instant | Usually instant | Instant | Instant |
+| **Complexity** | Simple | Medium | Medium | Simple |
+| **Maturity** | 8+ years | 2+ years | <2 years | 3+ years |
+| **Use case** | Conservative | Enhanced yield | Highest yield | Growth |
+| **Gas cost** | ~$0.03 | ~$0.04 | ~$0.05 | ~$0.30 |
+| **Monitoring** | Quarterly | Quarterly | Monthly | Quarterly |
+
+---
+
+**Document Version:** 3.0  
+**Last Updated:** November 21, 2025  
+**Review:** When protocol UIs change or new protocols added
