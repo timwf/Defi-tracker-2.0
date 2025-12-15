@@ -137,6 +137,7 @@ export async function fetchPositions(): Promise<HeldPosition[]> {
     isShareBased: row.is_share_based ?? undefined,
     underlyingValue: row.underlying_value ? Number(row.underlying_value) : undefined,
     actualDepositedUsd: row.actual_deposited_usd ? Number(row.actual_deposited_usd) : undefined,
+    useApyForYield: row.use_apy_for_yield ?? undefined,
   }));
 }
 
@@ -258,6 +259,7 @@ export async function updatePositionInDb(
   if ('isShareBased' in updates) updateData.is_share_based = updates.isShareBased ?? null;
   if (updates.underlyingValue !== undefined) updateData.underlying_value = updates.underlyingValue;
   if (updates.actualDepositedUsd !== undefined) updateData.actual_deposited_usd = updates.actualDepositedUsd;
+  if ('useApyForYield' in updates) updateData.use_apy_for_yield = updates.useApyForYield ?? null;
 
   console.log('[DB Update]', poolId, updateData);
 

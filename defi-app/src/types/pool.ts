@@ -127,6 +127,8 @@ export interface HeldPosition {
   isShareBased?: boolean;       // User override: treat as share-based vault (use convertToAssets)
   underlyingValue?: number;     // Cached underlying value from convertToAssets
   actualDepositedUsd?: number;  // Actual underlying tokens deposited to vault (from on-chain transfers)
+  // Yield calculation override
+  useApyForYield?: boolean;     // Use APY-based yield calculation instead of deposit tracking (uses fixedApy if set, else pool.apy)
 }
 
 // Scanned token from wallet

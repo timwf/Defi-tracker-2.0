@@ -540,7 +540,21 @@ export function PoolInfoCard({
                 ? position.underlyingValue
                 : position.amountUsd;
 
-              const yieldUsd = depositedUsd && currentUsd ? currentUsd - depositedUsd : null;
+              // Calculate yield from deposit tracking
+              const trackingYieldUsd = depositedUsd && currentUsd ? currentUsd - depositedUsd : null;
+
+              // Calculate APY-based yield if enabled
+              const useApyForYield = position.useApyForYield || false;
+              const daysHeld = position.firstAcquiredAt
+                ? Math.floor((Date.now() - position.firstAcquiredAt) / (1000 * 60 * 60 * 24))
+                : 0;
+              const apyForCalc = position.fixedApy ?? pool.apy;
+              const apyBasedYield = useApyForYield && depositedUsd && daysHeld > 0
+                ? depositedUsd * (apyForCalc / 100) * (daysHeld / 365)
+                : null;
+
+              // Use APY-based yield if enabled, otherwise use tracking yield
+              const yieldUsd = useApyForYield && apyBasedYield !== null ? apyBasedYield : trackingYieldUsd;
 
               // For rebasing tokens, yield = token difference
               const yieldTokens = position.tokenBalance && position.initialTokenBalance
@@ -604,6 +618,11 @@ export function PoolInfoCard({
                         {yieldUsd !== null ? (
                           <div className={yieldUsd >= 0 ? 'text-green-400' : 'text-red-400'}>
                             {yieldUsd >= 0 ? '+' : ''}{formatCurrency(yieldUsd)}
+                            {useApyForYield && (
+                              <div className="text-orange-400 text-xs mt-0.5">
+                                via {apyForCalc.toFixed(1)}% APY
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="text-slate-500">-</div>
@@ -631,7 +650,15 @@ export function PoolInfoCard({
                       </div>
                       <div>
                         <div className="text-slate-500 text-xs">Yield Earned</div>
-                        {yieldTokens !== null ? (
+                        {useApyForYield && apyBasedYield !== null ? (
+                          // APY override: show USD-based yield
+                          <div className={apyBasedYield >= 0 ? 'text-green-400' : 'text-red-400'}>
+                            {apyBasedYield >= 0 ? '+' : ''}{formatCurrency(apyBasedYield)}
+                            <div className="text-orange-400 text-xs mt-0.5">
+                              via {apyForCalc.toFixed(1)}% APY
+                            </div>
+                          </div>
+                        ) : yieldTokens !== null ? (
                           (() => {
                             // For stablecoins assume $1 price, otherwise estimate from amountUsd/tokenBalance
                             const estimatedPrice = pool.stablecoin

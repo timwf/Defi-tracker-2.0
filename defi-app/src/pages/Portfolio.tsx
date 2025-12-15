@@ -45,6 +45,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [editNotes, setEditNotes] = useState('');
   const [editFixedApy, setEditFixedApy] = useState('');
   const [editIsShareBased, setEditIsShareBased] = useState(false);
+  const [editUseApyForYield, setEditUseApyForYield] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
   const [refreshingPoolId, setRefreshingPoolId] = useState<string | null>(null);
@@ -487,6 +488,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     setEditNotes(position.notes || '');
     setEditFixedApy(position.fixedApy?.toString() || '');
     setEditIsShareBased(position.isShareBased || false);
+    setEditUseApyForYield(position.useApyForYield || false);
   };
 
   const handleSaveEdit = async () => {
@@ -500,6 +502,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     console.log('[Save Edit]', {
       poolId: editingId,
       isShareBased: editIsShareBased,
+      useApyForYield: editUseApyForYield,
       amount,
       fixedApy: fixedApyValue,
     });
@@ -511,6 +514,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         notes: editNotes || undefined,
         fixedApy: fixedApyValue === null ? undefined : (isNaN(fixedApyValue) ? undefined : fixedApyValue),
         isShareBased: editIsShareBased,
+        useApyForYield: editUseApyForYield,
       });
       console.log('[Save Edit] Result:', success);
       if (onRefreshPositions) {
@@ -944,7 +948,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                         </div>
                         {/* Share-based vault toggle - only show for wallet positions */}
                         {position.source === 'wallet' && (
-                          <div className="mt-3 p-3 bg-slate-700/50 rounded-lg">
+                          <div className="mt-3 p-3 bg-slate-700/50 rounded-lg space-y-3">
                             <label className="flex items-center gap-3 cursor-pointer">
                               <input
                                 type="checkbox"
@@ -955,6 +959,21 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                               <div>
                                 <div className="text-sm text-slate-300">Share-based vault (ERC-4626)</div>
                                 <div className="text-xs text-slate-500">Enable to calculate yield from underlying value, not token balance</div>
+                              </div>
+                            </label>
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={editUseApyForYield}
+                                onChange={(e) => setEditUseApyForYield(e.target.checked)}
+                                className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-orange-500 focus:ring-orange-500"
+                              />
+                              <div>
+                                <div className="text-sm text-slate-300">Use APY for yield calculation</div>
+                                <div className="text-xs text-slate-500">
+                                  Override deposit tracking - calculate yield as: deposited × APY × days held
+                                  {editFixedApy && <span className="text-orange-400"> (using fixed {editFixedApy}%)</span>}
+                                </div>
                               </div>
                             </label>
                           </div>
