@@ -23,12 +23,70 @@ export function clearLocalUnmappedPositions(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
+// Clean up orphaned unmapped positions (linked to positions that no longer exist)
+export async function cleanupOrphanedUnmappedPositions(): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    // localStorage cleanup
+    try {
+      const unmapped = getLocalUnmappedPositions();
+      const positionsStored = localStorage.getItem('defi-tracker-positions');
+      const positions = positionsStored ? JSON.parse(positionsStored) : [];
+      const positionPoolIds = new Set(positions.map((p: { poolId: string }) => p.poolId));
+
+      const cleaned = unmapped.map((p) => {
+        if (p.linkedPoolId && !positionPoolIds.has(p.linkedPoolId)) {
+          return { ...p, linkedPoolId: null, linkedAt: null };
+        }
+        return p;
+      });
+      saveLocalUnmappedPositions(cleaned);
+    } catch {
+      // Ignore errors
+    }
+    return;
+  }
+
+  // For Supabase: Find unmapped positions with linked_pool_id that don't have matching positions
+  const { data: orphaned } = await supabase
+    .from('unmapped_positions')
+    .select('id, linked_pool_id')
+    .not('linked_pool_id', 'is', null);
+
+  if (!orphaned || orphaned.length === 0) return;
+
+  // Check which linked pools still exist
+  const linkedPoolIds = [...new Set(orphaned.map(o => o.linked_pool_id))];
+  const { data: existingPositions } = await supabase
+    .from('positions')
+    .select('pool_id')
+    .in('pool_id', linkedPoolIds);
+
+  const existingPoolIds = new Set(existingPositions?.map(p => p.pool_id) || []);
+  const orphanedIds = orphaned
+    .filter(o => !existingPoolIds.has(o.linked_pool_id))
+    .map(o => o.id);
+
+  if (orphanedIds.length > 0) {
+    await supabase
+      .from('unmapped_positions')
+      .update({ linked_pool_id: null, linked_at: null })
+      .in('id', orphanedIds);
+    console.log(`Cleaned up ${orphanedIds.length} orphaned unmapped positions`);
+  }
+}
+
 // Fetch all unmapped positions
 export async function fetchUnmappedPositions(): Promise<UnmappedPosition[]> {
   const { data: { user } } = await supabase.auth.getUser();
 
+  // Clean up any orphaned positions first
+  await cleanupOrphanedUnmappedPositions();
+
   if (!user) {
-    return getLocalUnmappedPositions();
+    // Only return unmapped ones (no linked_pool_id)
+    return getLocalUnmappedPositions().filter(p => !p.linkedPoolId);
   }
 
   const { data, error } = await supabase

@@ -62,6 +62,25 @@ function removeLocalPosition(poolId: string): boolean {
   const filtered = positions.filter(p => p.poolId !== poolId);
   if (filtered.length === positions.length) return false;
   saveLocalPositions(filtered);
+
+  // Clear linked_pool_id from any unmapped positions that were linked to this pool
+  try {
+    const unmappedKey = 'defi-tracker-unmapped-positions';
+    const unmappedStored = localStorage.getItem(unmappedKey);
+    if (unmappedStored) {
+      const unmapped = JSON.parse(unmappedStored);
+      const updated = unmapped.map((p: { linkedPoolId?: string | null; linkedAt?: number | null }) => {
+        if (p.linkedPoolId === poolId) {
+          return { ...p, linkedPoolId: null, linkedAt: null };
+        }
+        return p;
+      });
+      localStorage.setItem(unmappedKey, JSON.stringify(updated));
+    }
+  } catch {
+    // Ignore localStorage errors
+  }
+
   return true;
 }
 
@@ -194,6 +213,18 @@ export async function removePositionFromDb(poolId: string): Promise<boolean> {
   if (error) {
     console.error('Error removing position:', error);
     return false;
+  }
+
+  // Clear the linked_pool_id from any unmapped positions that were linked to this pool
+  // This allows them to show up again in the wallet import list
+  const { error: unlinkError } = await supabase
+    .from('unmapped_positions')
+    .update({ linked_pool_id: null, linked_at: null })
+    .eq('linked_pool_id', poolId);
+
+  if (unlinkError) {
+    console.error('Error unlinking unmapped positions:', unlinkError);
+    // Don't return false - the position was already deleted successfully
   }
 
   return true;
