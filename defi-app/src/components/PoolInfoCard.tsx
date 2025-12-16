@@ -680,13 +680,24 @@ export function PoolInfoCard({
               // Detect Pendle PT tokens by project name or symbol prefix
               const isPendlePT = pool.project === 'pendle' || position.tokenSymbol?.startsWith('PT-');
 
-              // For share-based vaults: use actualDepositedUsd (tracks underlying token transfers TO vault)
-              // For Pendle PT tokens: use actualDepositedUsd (tracks stablecoin spent to purchase PT)
-              // This gives accurate deposited amount regardless of vault share price at deposit time
-              // Fallback to initialTokenBalance (share count) for backwards compatibility
-              const depositedUsd = (isShareBased && pool.stablecoin) || isPendlePT
-                ? (position.actualDepositedUsd ?? (pool.stablecoin ? position.initialTokenBalance : null) ?? null)
-                : (pool.stablecoin && position.initialTokenBalance ? position.initialTokenBalance : null);
+              // Calculate deposited USD amount
+              const useApyForYield = position.useApyForYield || false;
+              let depositedUsd: number | null = null;
+              if ((isShareBased && pool.stablecoin) || isPendlePT) {
+                // For share-based stablecoin vaults or Pendle PT: use actualDepositedUsd or initialTokenBalance
+                depositedUsd = position.actualDepositedUsd ?? (pool.stablecoin ? position.initialTokenBalance : null) ?? null;
+              } else if (pool.stablecoin && position.initialTokenBalance) {
+                // For stablecoin rebasing tokens: use initialTokenBalance as USD
+                depositedUsd = position.initialTokenBalance;
+              } else if (useApyForYield) {
+                // For non-stablecoin with APY mode: estimate from initialTokenBalance × current price
+                if (position.actualDepositedUsd) {
+                  depositedUsd = position.actualDepositedUsd;
+                } else if (position.initialTokenBalance && position.tokenBalance && position.tokenBalance > 0) {
+                  const currentPrice = position.amountUsd / position.tokenBalance;
+                  depositedUsd = position.initialTokenBalance * currentPrice;
+                }
+              }
 
               // Use underlyingValue if available (from convertToAssets), otherwise use amountUsd
               const currentUsd = isShareBased && position.underlyingValue
@@ -697,14 +708,34 @@ export function PoolInfoCard({
               const trackingYieldUsd = depositedUsd && currentUsd ? currentUsd - depositedUsd : null;
 
               // Calculate APY-based yield if enabled
-              const useApyForYield = position.useApyForYield || false;
-              const daysHeld = position.firstAcquiredAt
-                ? Math.floor((Date.now() - position.firstAcquiredAt) / (1000 * 60 * 60 * 24))
-                : 0;
               const apyForCalc = position.fixedApy ?? pool.apy;
-              const apyBasedYield = useApyForYield && depositedUsd && daysHeld > 0
-                ? depositedUsd * (apyForCalc / 100) * (daysHeld / 365)
-                : null;
+              let apyBasedYield: number | null = null;
+
+              if (useApyForYield && position.transactions && position.transactions.length > 0) {
+                // Calculate yield per deposit based on when each was made
+                const now = Date.now();
+                apyBasedYield = position.transactions.reduce((total, tx) => {
+                  const daysHeld = Math.floor((now - tx.timestamp) / (1000 * 60 * 60 * 24));
+                  if (daysHeld > 0) {
+                    // For non-stablecoins, estimate USD value using current price
+                    const txUsdValue = pool.stablecoin
+                      ? tx.amount
+                      : (position.tokenBalance && position.tokenBalance > 0
+                          ? tx.amount * (position.amountUsd / position.tokenBalance)
+                          : 0);
+                    return total + (txUsdValue * (apyForCalc / 100) * (daysHeld / 365));
+                  }
+                  return total;
+                }, 0);
+              } else if (useApyForYield && depositedUsd) {
+                // Fallback: use total deposited with first deposit date
+                const daysHeld = position.firstAcquiredAt
+                  ? Math.floor((Date.now() - position.firstAcquiredAt) / (1000 * 60 * 60 * 24))
+                  : 0;
+                if (daysHeld > 0) {
+                  apyBasedYield = depositedUsd * (apyForCalc / 100) * (daysHeld / 365);
+                }
+              }
 
               // Use APY-based yield if enabled, otherwise use tracking yield
               const yieldUsd = useApyForYield && apyBasedYield !== null ? apyBasedYield : trackingYieldUsd;

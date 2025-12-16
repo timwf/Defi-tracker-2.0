@@ -245,6 +245,127 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const projectedMonthlyEarnings = projectedAnnualEarnings / 12;
   const projectedDailyEarnings = projectedAnnualEarnings / 365;
 
+  // Calculate total yield earned to date - matches exactly what's shown on each position card
+  const totalYieldEarned = useMemo(() => {
+    let debugTotal = 0;
+    console.log('=== YIELD CALCULATION DEBUG ===');
+
+    positionsWithPools.forEach(({ position, pool }) => {
+      // Only count if position has yield tracking data
+      if (!position.firstAcquiredAt && !position.entryDate && !position.transactions && !position.initialTokenBalance) {
+        console.log(`${pool.symbol}: SKIPPED (no tracking data)`);
+        return;
+      }
+
+      const isShareBased = position.isShareBased || false;
+      const isPendlePT = pool.project === 'pendle' || position.tokenSymbol?.startsWith('PT-');
+      const useApyForYield = position.useApyForYield || false;
+
+      // Calculate deposited amount
+      let depositedUsd: number | null = null;
+      if ((isShareBased && pool.stablecoin) || isPendlePT) {
+        depositedUsd = position.actualDepositedUsd ?? (pool.stablecoin ? position.initialTokenBalance : null) ?? null;
+      } else if (pool.stablecoin && position.initialTokenBalance) {
+        depositedUsd = position.initialTokenBalance;
+      } else if (useApyForYield) {
+        // For non-stablecoin with APY mode:
+        // Use actualDepositedUsd if tracked, otherwise estimate from initialTokenBalance × current price
+        if (position.actualDepositedUsd) {
+          depositedUsd = position.actualDepositedUsd;
+        } else if (position.initialTokenBalance && position.tokenBalance && position.tokenBalance > 0) {
+          // Estimate: initialTokens × (currentUsd / currentTokens)
+          const currentPrice = position.amountUsd / position.tokenBalance;
+          depositedUsd = position.initialTokenBalance * currentPrice;
+        }
+      }
+
+      // Current value
+      const currentUsd = isShareBased && position.underlyingValue
+        ? position.underlyingValue
+        : position.amountUsd;
+
+      // Tracking-based yield
+      const trackingYieldUsd = depositedUsd && currentUsd ? currentUsd - depositedUsd : null;
+
+      // APY-based yield - weighted by deposit dates if transaction history available
+      const apyForCalc = position.fixedApy ?? pool.apy;
+      let apyBasedYield: number | null = null;
+
+      if (useApyForYield && position.transactions && position.transactions.length > 0) {
+        // Calculate yield per deposit based on when each was made
+        const now = Date.now();
+        apyBasedYield = position.transactions.reduce((total, tx) => {
+          const daysHeld = Math.floor((now - tx.timestamp) / (1000 * 60 * 60 * 24));
+          if (daysHeld > 0) {
+            // For non-stablecoins, estimate USD value using current price
+            const txUsdValue = pool.stablecoin
+              ? tx.amount
+              : (position.tokenBalance && position.tokenBalance > 0
+                  ? tx.amount * (position.amountUsd / position.tokenBalance)
+                  : 0);
+            return total + (txUsdValue * (apyForCalc / 100) * (daysHeld / 365));
+          }
+          return total;
+        }, 0);
+      } else if (useApyForYield && depositedUsd) {
+        // Fallback: use total deposited with first deposit date
+        const daysHeld = position.firstAcquiredAt
+          ? Math.floor((Date.now() - position.firstAcquiredAt) / (1000 * 60 * 60 * 24))
+          : 0;
+        if (daysHeld > 0) {
+          apyBasedYield = depositedUsd * (apyForCalc / 100) * (daysHeld / 365);
+        }
+      }
+
+      console.log(`${pool.symbol}:`, {
+        isShareBased,
+        isPendlePT,
+        useApyForYield,
+        stablecoin: pool.stablecoin,
+        depositedUsd,
+        currentUsd,
+        trackingYieldUsd,
+        apyBasedYield,
+        tokenBalance: position.tokenBalance,
+        initialTokenBalance: position.initialTokenBalance,
+        underlyingValue: position.underlyingValue,
+        actualDepositedUsd: position.actualDepositedUsd,
+        amountUsd: position.amountUsd,
+        // Raw position data for debugging
+        rawPosition: position,
+      });
+
+      let yieldContribution = 0;
+
+      // For share-based stablecoin vaults
+      if (isShareBased && pool.stablecoin) {
+        const yieldUsd = useApyForYield && apyBasedYield !== null ? apyBasedYield : trackingYieldUsd;
+        if (yieldUsd !== null) {
+          yieldContribution = yieldUsd;
+          console.log(`  -> Share-based yield: ${yieldUsd}`);
+        }
+      } else {
+        // For rebasing tokens
+        if (useApyForYield && apyBasedYield !== null) {
+          yieldContribution = apyBasedYield;
+          console.log(`  -> APY-based yield: ${apyBasedYield}`);
+        } else if (position.tokenBalance && position.initialTokenBalance) {
+          const yieldTokens = position.tokenBalance - position.initialTokenBalance;
+          const estimatedPrice = pool.stablecoin
+            ? 1
+            : (position.tokenBalance > 0 ? position.amountUsd / position.tokenBalance : 1);
+          yieldContribution = yieldTokens * estimatedPrice;
+          console.log(`  -> Rebasing yield: ${yieldTokens} tokens × $${estimatedPrice} = ${yieldContribution}`);
+        }
+      }
+
+      debugTotal += yieldContribution;
+    });
+
+    console.log(`=== TOTAL YIELD: ${debugTotal} ===`);
+    return debugTotal;
+  }, [positionsWithPools]);
+
   // Load unmapped positions on mount
   useEffect(() => {
     loadUnmappedPositions();
@@ -770,7 +891,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       </div>
 
       {/* Summary Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
         <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
           <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
             Total Value
@@ -798,6 +919,15 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
             <MetricInfo metric="organicApy" value={organicApy} />
           </div>
           <div className="text-lg md:text-2xl font-bold text-blue-400">{organicApy.toFixed(2)}%</div>
+        </div>
+        <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
+          <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
+            Yield to Date
+            <MetricInfo metric="yieldToDate" value={totalYieldEarned} />
+          </div>
+          <div className={`text-lg md:text-2xl font-bold ${totalYieldEarned >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {totalYieldEarned >= 0 ? '+' : ''}{formatCurrency(totalYieldEarned)}
+          </div>
         </div>
         <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
           <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">

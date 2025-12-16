@@ -7,7 +7,7 @@ export type MetricType =
   | 'change1d' | 'change7d' | 'change30d' | 'sigma' | 'prediction' | 'stablecoin'
   // Portfolio metrics
   | 'totalValue' | 'weightedApy' | 'organicApy' | 'annualEarnings' | 'monthlyEarnings' | 'dailyEarnings'
-  | 'amount' | 'allocation'
+  | 'amount' | 'allocation' | 'yieldToDate'
   // Risk metrics
   | 'stablecoinAllocation' | 'volatileAllocation' | 'organicYield';
 
@@ -305,6 +305,16 @@ export const metricDefinitions: Record<MetricType, MetricDefinition> = {
     detailed: 'Your projected daily yield across all positions. This compounds over time if you reinvest.\n\n**Note:** Daily values fluctuate more than annual projections. This is a rough guide, not exact income.',
     interpretation: (value: number) => {
       return `~${formatCurrency(value)}/day, or ~${formatCurrency(value * 7)}/week at current rates.`;
+    },
+  },
+
+  yieldToDate: {
+    title: 'Total Yield Earned',
+    brief: 'Sum of all yield earned across your positions to date.',
+    detailed: 'This shows the total yield you\'ve earned since depositing into each position. It\'s calculated by summing the "Yield Earned" from each position card.\n\n**How it\'s calculated:**\n- For share-based vaults (ERC-4626): Current underlying value - Deposited amount\n- For rebasing tokens: (Current balance - Initial balance) × token price\n- If "Use APY for yield" is enabled: Deposited × APY × days held / 365\n\n**Note:** This requires wallet-imported positions with deposit tracking for accurate values. Manual positions without deposit data won\'t contribute to this total.',
+    interpretation: (value: number) => {
+      if (value === 0) return 'No yield data available yet. Import wallet positions or enable APY-based yield calculation to track earnings.';
+      return `You\'ve earned ${formatCurrency(value)} total across all tracked positions.`;
     },
   },
 
