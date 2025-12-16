@@ -98,16 +98,29 @@ export function PoolsPage({
     // Historical metric fields that need to be looked up from metrics
     const historicalFields = ['base90', 'volatility', 'organicPct', 'tvlChange30d'] as const;
     const isHistoricalSort = historicalFields.includes(sortField as typeof historicalFields[number]);
+    const isUtilizationSort = sortField === 'utilization';
 
     // Pre-compute all metrics once before sorting (avoids repeated lookups)
     const metricsMap = isHistoricalSort ? getAllPoolMetrics() : null;
+
+    // Helper to calculate utilization
+    const getUtilization = (pool: Pool): number | null => {
+      if (pool.totalBorrowUsd === undefined || pool.totalSupplyUsd === undefined || pool.totalSupplyUsd === 0) {
+        return null;
+      }
+      return (pool.totalBorrowUsd / pool.totalSupplyUsd) * 100;
+    };
 
     return combined.sort((a, b) => {
       let aVal: string | number | boolean | null;
       let bVal: string | number | boolean | null;
 
+      // Check if sorting by utilization (computed field)
+      if (isUtilizationSort) {
+        aVal = getUtilization(a);
+        bVal = getUtilization(b);
       // Check if sorting by a historical metric field
-      if (isHistoricalSort && metricsMap) {
+      } else if (isHistoricalSort && metricsMap) {
         const aMetrics = metricsMap.get(a.pool);
         const bMetrics = metricsMap.get(b.pool);
         aVal = aMetrics?.[sortField as keyof typeof aMetrics] ?? null;
@@ -335,6 +348,7 @@ export function PoolsPage({
             <option value="project">Protocol</option>
             <option value="chain">Chain</option>
             <option value="stablecoin">Stablecoin</option>
+            <option value="utilization">Utilization %</option>
             <option value="apyMean30d">Avg 30D</option>
             <option value="base90">Avg 90D *</option>
             <option value="apyPct1D">1D Change</option>

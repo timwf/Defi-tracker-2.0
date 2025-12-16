@@ -68,7 +68,6 @@ function AppContent() {
 
   // Load user data when user changes (or load from localStorage if not logged in)
   useEffect(() => {
-    console.log('User state changed:', user?.email || 'null');
     if (user) {
       loadUserData();
     } else {
@@ -87,8 +86,6 @@ function AppContent() {
   }
 
   async function loadUserData() {
-    console.log('Loading user data from Supabase...');
-
     // Check for local data to migrate
     const localPositions = getLocalPositions();
     const localViews = getLocalViews();
@@ -112,7 +109,6 @@ function AppContent() {
       fetchViews(),
     ]);
 
-    console.log('Loaded positions:', positions.length, 'views:', views.length);
     setHeldPositions(positions);
     setSavedViews(views);
   }
@@ -121,10 +117,43 @@ function AppContent() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('https://yields.llama.fi/pools');
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data: PoolsResponse = await response.json();
-      setPools(data.data);
+      // Fetch both pools and borrow data in parallel
+      const [poolsResponse, borrowResponse] = await Promise.all([
+        fetch('https://yields.llama.fi/pools'),
+        fetch('https://yields.llama.fi/poolsBorrow'),
+      ]);
+
+      if (!poolsResponse.ok) throw new Error(`HTTP ${poolsResponse.status}`);
+      const poolsData: PoolsResponse = await poolsResponse.json();
+
+      // Merge borrow data if available
+      let borrowMap: Map<string, { totalSupplyUsd?: number; totalBorrowUsd?: number; borrowable?: boolean }> = new Map();
+      if (borrowResponse.ok) {
+        const borrowData = await borrowResponse.json();
+        if (borrowData.data) {
+          for (const pool of borrowData.data) {
+            borrowMap.set(pool.pool, {
+              totalSupplyUsd: pool.totalSupplyUsd,
+              totalBorrowUsd: pool.totalBorrowUsd,
+              borrowable: pool.borrowable,
+            });
+          }
+        }
+        console.log('[Utilization Debug] Borrow data loaded:', borrowMap.size, 'pools with utilization data');
+      } else {
+        console.log('[Utilization Debug] Failed to fetch borrow data:', borrowResponse.status);
+      }
+
+      // Merge borrow data into pools
+      const mergedPools = poolsData.data.map(pool => {
+        const borrowInfo = borrowMap.get(pool.pool);
+        if (borrowInfo) {
+          return { ...pool, ...borrowInfo };
+        }
+        return pool;
+      });
+
+      setPools(mergedPools);
       setLastUpdated(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch pools');

@@ -6,6 +6,7 @@ import { fetchUnmappedPositions } from '../utils/unmappedPositions';
 import { refreshTokenBalance, getAllTokenTransfers, getVaultUnderlyingValue, getVaultDepositedAmount, getPTCostBasis } from '../utils/walletScanner';
 import { downloadPortfolioJson } from '../utils/exportPortfolio';
 import { formatTvl } from '../utils/filterPools';
+import { fetchAllUtilization } from '../utils/protocolUtilization';
 import { MetricInfo } from '../components/MetricInfo';
 import { PoolSearchInput } from '../components/PoolSearchInput';
 import { PoolInfoCard } from '../components/PoolInfoCard';
@@ -51,12 +52,20 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [refreshingPoolId, setRefreshingPoolId] = useState<string | null>(null);
   const [autoFetchProgress, setAutoFetchProgress] = useState<{ current: number; total: number } | null>(null);
   const [walletRefreshProgress, setWalletRefreshProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // Sorting state for portfolio positions
+  type PortfolioSortField = 'amount' | 'apy' | 'tvl' | 'symbol' | 'chain' | 'project';
+  const [portfolioSortField, setPortfolioSortField] = useState<PortfolioSortField>('amount');
+  const [portfolioSortDirection, setPortfolioSortDirection] = useState<'asc' | 'desc'>('desc');
   const hasAutoFetched = useRef(false);
   const hasAutoRefreshedWallet = useRef(false);
 
   // Wallet import state
   const [showWalletImport, setShowWalletImport] = useState(false);
   const [unmappedPositions, setUnmappedPositions] = useState<UnmappedPosition[]>([]);
+
+  // Protocol utilization state
+  const [utilizationData, setUtilizationData] = useState<Map<string, { utilization: number; totalSupply?: number; totalBorrow?: number; source: string }>>(new Map());
 
   // Get list of pool IDs already in portfolio
   const heldPoolIds = useMemo(() => positions.map(p => p.poolId), [positions]);
@@ -141,6 +150,65 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       })
       .filter((x): x is PositionWithPool => x !== null);
   }, [positions, pools]);
+
+  // Sorted positions for display
+  const sortedPositions = useMemo(() => {
+    return [...positionsWithPools].sort((a, b) => {
+      let aVal: string | number;
+      let bVal: string | number;
+
+      switch (portfolioSortField) {
+        case 'amount':
+          aVal = a.position.amountUsd;
+          bVal = b.position.amountUsd;
+          break;
+        case 'apy':
+          aVal = a.position.fixedApy ?? a.pool.apy;
+          bVal = b.position.fixedApy ?? b.pool.apy;
+          break;
+        case 'tvl':
+          aVal = a.pool.tvlUsd;
+          bVal = b.pool.tvlUsd;
+          break;
+        case 'symbol':
+          aVal = a.pool.symbol;
+          bVal = b.pool.symbol;
+          break;
+        case 'chain':
+          aVal = a.pool.chain;
+          bVal = b.pool.chain;
+          break;
+        case 'project':
+          aVal = a.pool.project;
+          bVal = b.pool.project;
+          break;
+        default:
+          aVal = a.position.amountUsd;
+          bVal = b.position.amountUsd;
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return portfolioSortDirection === 'asc'
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
+      }
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return portfolioSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
+      return 0;
+    });
+  }, [positionsWithPools, portfolioSortField, portfolioSortDirection]);
+
+  const handlePortfolioSort = (field: PortfolioSortField) => {
+    if (field === portfolioSortField) {
+      setPortfolioSortDirection(portfolioSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setPortfolioSortField(field);
+      setPortfolioSortDirection('desc');
+    }
+  };
 
   // Portfolio calculations - only include positions with matching pools
   const totalValue = useMemo(() =>
@@ -244,7 +312,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
     const refreshWalletPositions = async () => {
       setWalletRefreshProgress({ current: 0, total: walletPositions.length });
-      console.log('[Wallet Refresh] Starting refresh for', walletPositions.length, 'positions');
 
       for (let i = 0; i < walletPositions.length; i++) {
         const pos = walletPositions[i];
@@ -265,23 +332,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                 amountUsd: result.usdValue ?? pos.amountUsd,
               };
 
-              // Always log position data for debugging
-              const tokenPriceFromUsd = result.usdValue && result.balance > 0
-                ? result.usdValue / result.balance
-                : null;
-
-              console.log(`[Position Debug] ${pool.project} - ${result.symbol || pos.tokenSymbol}`, {
-                chain: pool.chain,
-                isStablecoin: pool.stablecoin,
-                isShareBased: pos.isShareBased || false,
-                currentBalance: result.balance,
-                storedInitialBalance: pos.initialTokenBalance,
-                currentUsdValue: result.usdValue,
-                tokenPrice: tokenPriceFromUsd?.toFixed(4),
-                yieldTokens: pos.initialTokenBalance ? result.balance - pos.initialTokenBalance : 'N/A (no initial)',
-                hasTxHistory: pos.transactions?.length ?? 0,
-              });
-
               // Fetch full transaction history if not already present
               if (!pos.transactions || pos.transactions.length === 0) {
                 try {
@@ -294,11 +344,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                     updates.firstAcquiredAt = txData.firstAcquiredAt;
                     updates.transactions = txData.transactions;
                     updates.initialTokenBalance = txData.totalDeposited;
-                    console.log(`[TX Fetch] ${result.symbol || pos.tokenSymbol}`, {
-                      totalDeposited: txData.totalDeposited,
-                      txCount: txData.transactions.length,
-                      calculatedYield: result.balance - txData.totalDeposited,
-                    });
                   }
                 } catch (err) {
                   console.error('Failed to fetch transaction history:', pos.poolId, err);
@@ -331,10 +376,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                     updates.actualDepositedUsd = depositResult.totalDeposited;
                   }
 
-                  const yieldCalc = vaultResult && depositResult
-                      ? vaultResult.underlyingValue - depositResult.totalDeposited
-                      : null;
-                  console.log(`[Share-based Vault - Auto] ${result.symbol || pos.tokenSymbol}: underlying=$${vaultResult?.underlyingValue?.toFixed(2)}, deposited=$${depositResult?.totalDeposited?.toFixed(2)}, yield=$${yieldCalc?.toFixed(2) ?? 'N/A'}`);
                 } catch (err) {
                   console.error('Failed to get vault underlying value:', pos.poolId, err);
                 }
@@ -350,8 +391,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                   );
                   if (costBasis && costBasis.totalCost > 0) {
                     updates.actualDepositedUsd = costBasis.totalCost;
-                    const ptYield = result.usdValue ? result.usdValue - costBasis.totalCost : null;
-                    console.log(`[Pendle PT - Auto] ${result.symbol}: cost=$${costBasis.totalCost.toFixed(2)}, current=$${result.usdValue?.toFixed(2)}, yield=$${ptYield?.toFixed(2) ?? 'N/A'}`);
                   }
                 } catch (err) {
                   console.error('Failed to get PT cost basis:', pos.poolId, err);
@@ -372,7 +411,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         }
       }
 
-      console.log('[Wallet Refresh] Complete');
       setWalletRefreshProgress(null);
       if (onRefreshPositions) {
         onRefreshPositions();
@@ -381,6 +419,32 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
     refreshWalletPositions();
   }, [pools.length, positions.length, onRefreshPositions]);
+
+  // Fetch protocol-specific utilization data for positions
+  useEffect(() => {
+    if (positions.length === 0 || pools.length === 0) return;
+
+    const positionsToFetch = positions
+      .map(pos => {
+        const pool = pools.find(p => p.pool === pos.poolId);
+        if (!pool || !pos.tokenAddress) return null;
+        return {
+          protocol: pool.project,
+          tokenAddress: pos.tokenAddress,
+          chain: pool.chain,
+          poolId: pos.poolId
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    if (positionsToFetch.length === 0) return;
+
+    fetchAllUtilization(positionsToFetch).then(data => {
+      setUtilizationData(data);
+    }).catch(err => {
+      console.error('Failed to fetch utilization data:', err);
+    });
+  }, [positions, pools]);
 
   // Organic APY - weighted by base yield only (excludes reward tokens)
   const organicApy = useMemo(() => {
@@ -499,14 +563,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     // If empty string, explicitly set to undefined to clear the fixed APY
     const fixedApyValue = editFixedApy.trim() === '' ? null : parseFloat(editFixedApy);
 
-    console.log('[Save Edit]', {
-      poolId: editingId,
-      isShareBased: editIsShareBased,
-      useApyForYield: editUseApyForYield,
-      amount,
-      fixedApy: fixedApyValue,
-    });
-
     setSaving(true);
     try {
       const success = await updatePositionInDb(editingId, {
@@ -516,7 +572,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         isShareBased: editIsShareBased,
         useApyForYield: editUseApyForYield,
       });
-      console.log('[Save Edit] Result:', success);
       if (onRefreshPositions) {
         await onRefreshPositions();
       }
@@ -583,12 +638,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
             updates.firstAcquiredAt = txData.firstAcquiredAt;
             updates.transactions = txData.transactions;
             updates.initialTokenBalance = txData.totalDeposited;
-            console.log('[Yield Debug - Manual Refresh]', position.tokenSymbol, {
-              currentBalance: result.balance,
-              totalDeposited: txData.totalDeposited,
-              yield: result.balance - txData.totalDeposited,
-              txCount: txData.transactions.length,
-            });
           }
         } catch (err) {
           console.error('Failed to fetch transaction history:', poolId, err);
@@ -619,17 +668,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
             if (depositResult) {
               updates.actualDepositedUsd = depositResult.totalDeposited;
             }
-
-            console.log('[Share-based Vault]', position.tokenSymbol, {
-              shares: result.balance,
-              sharesRaw: result.balanceRaw.toString(),
-              decimals: result.decimals,
-              underlyingValue: vaultResult?.underlyingValue,
-              actualDeposited: depositResult?.totalDeposited,
-              yield: vaultResult && depositResult
-                ? vaultResult.underlyingValue - depositResult.totalDeposited
-                : 'N/A',
-            });
           } catch (err) {
             console.error('Failed to get vault underlying value:', poolId, err);
           }
@@ -806,16 +844,35 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
               <table className="w-full text-sm min-w-[400px]">
                 <thead>
                   <tr className="border-b border-slate-700 text-slate-400 text-xs">
-                    <th className="text-left py-2 px-3 font-medium">Pool</th>
-                    <th className="text-right py-2 px-3 font-medium">Amount</th>
-                    <th className="text-right py-2 px-3 font-medium">APY</th>
-                    <th className="text-right py-2 px-3 font-medium">TVL</th>
+                    <th
+                      className="text-left py-2 px-3 font-medium cursor-pointer hover:text-white select-none"
+                      onClick={() => handlePortfolioSort('symbol')}
+                    >
+                      Pool {portfolioSortField === 'symbol' && (portfolioSortDirection === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th
+                      className="text-right py-2 px-3 font-medium cursor-pointer hover:text-white select-none"
+                      onClick={() => handlePortfolioSort('amount')}
+                    >
+                      Amount {portfolioSortField === 'amount' && (portfolioSortDirection === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th
+                      className="text-right py-2 px-3 font-medium cursor-pointer hover:text-white select-none"
+                      onClick={() => handlePortfolioSort('apy')}
+                    >
+                      APY {portfolioSortField === 'apy' && (portfolioSortDirection === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th
+                      className="text-right py-2 px-3 font-medium cursor-pointer hover:text-white select-none"
+                      onClick={() => handlePortfolioSort('tvl')}
+                    >
+                      TVL {portfolioSortField === 'tvl' && (portfolioSortDirection === 'asc' ? '↑' : '↓')}
+                    </th>
                     <th className="text-center py-2 px-3 font-medium">Pred</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {positionsWithPools.map(({ position, pool, yesterdayApy, metrics }) => {
-                    const apyChange = yesterdayApy !== null ? pool.apy - yesterdayApy : null;
+                  {sortedPositions.map(({ position, pool, metrics }) => {
                     const tvlChange = metrics?.tvlChange30d;
                     const pred = pool.predictions;
 
@@ -851,9 +908,9 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                           ) : (
                             <>
                               <span className="text-green-400">{pool.apy.toFixed(1)}%</span>
-                              {apyChange !== null && (
-                                <span className={`ml-1 ${apyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                  {apyChange >= 0 ? '▲' : '▼'}
+                              {pool.apyPct1D !== null && (
+                                <span className={`ml-1 ${pool.apyPct1D >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {pool.apyPct1D >= 0 ? '▲' : '▼'}
                                 </span>
                               )}
                             </>
@@ -895,7 +952,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {positionsWithPools.map(({ position, pool, alerts }) => {
+              {sortedPositions.map(({ position, pool, alerts }) => {
                 const isEditing = editingId === position.poolId;
 
                 return (
@@ -1012,6 +1069,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                         isFetching={fetchingPoolId === position.poolId}
                         onRefreshWalletPosition={handleRefreshWalletPosition}
                         isRefreshing={refreshingPoolId === position.poolId}
+                        protocolUtilization={utilizationData.get(position.poolId)}
                       />
                     )}
                   </div>

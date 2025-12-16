@@ -73,7 +73,6 @@ export async function cleanupOrphanedUnmappedPositions(): Promise<void> {
       .from('unmapped_positions')
       .update({ linked_pool_id: null, linked_at: null })
       .in('id', orphanedIds);
-    console.log(`Cleaned up ${orphanedIds.length} orphaned unmapped positions`);
   }
 }
 

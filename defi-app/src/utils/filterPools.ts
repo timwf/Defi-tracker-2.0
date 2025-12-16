@@ -73,7 +73,8 @@ export function getAvailableProjectsForChains(pools: Pool[], selectedChains: str
   return getUniqueProjects(filteredPools);
 }
 
-export function formatTvl(tvl: number): string {
+export function formatTvl(tvl: number | null | undefined): string {
+  if (tvl === null || tvl === undefined) return '-';
   if (tvl >= 1_000_000_000) {
     return `$${(tvl / 1_000_000_000).toFixed(2)}B`;
   }

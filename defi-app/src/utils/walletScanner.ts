@@ -370,14 +370,6 @@ export async function getVaultUnderlyingValue(
 
     const underlyingValue = formatBalance(underlyingRaw, underlyingDecimals);
 
-    console.log('[convertToAssets]', {
-      vaultAddress,
-      sharesBalance: sharesBalance.toString(),
-      underlyingRaw: underlyingRaw.toString(),
-      underlyingValue,
-      underlyingDecimals,
-    });
-
     return { underlyingValue, underlyingDecimals };
   } catch (err) {
     console.error('[convertToAssets] Error:', err);
@@ -467,10 +459,6 @@ export async function getVaultDepositedAmount(
     // Get unique tx hashes where user received vault shares (these are deposit txs)
     const depositTxHashes = new Set(shareReceives.map(t => t.hash));
 
-    console.log('[getVaultDepositedAmount] Found deposit txs:', depositTxHashes.size);
-    console.log('[getVaultDepositedAmount] DEPOSIT TXS (shares received):');
-    shareReceives.forEach(t => console.log(`  ${t.hash} - ${t.value} shares from ${t.from}`));
-
     if (depositTxHashes.size === 0) {
       return { totalDeposited: 0, underlyingAddress, underlyingDecimals };
     }
@@ -499,9 +487,6 @@ export async function getVaultDepositedAmount(
 
     const underlyingOutData = await underlyingOutResponse.json();
     const underlyingOuts: AssetTransfer[] = underlyingOutData.result?.transfers || [];
-
-    console.log(`[getVaultDepositedAmount] ${underlyingMetadata.symbol} OUTFLOWS from wallet:`);
-    underlyingOuts.forEach(t => console.log(`  ${t.hash} - ${t.value} ${underlyingMetadata.symbol} to ${t.to}`));
 
     // Combine all token outflows (underlying + alternatives like USDC/DAI for USDS)
     let allTokenOuts: AssetTransfer[] = [...underlyingOuts];
@@ -533,9 +518,6 @@ export async function getVaultDepositedAmount(
           const altData = await altResponse.json();
           const altOuts: AssetTransfer[] = altData.result?.transfers || [];
           if (altOuts.length > 0) {
-            const altMeta = await getTokenMetadata(altToken, chain);
-            console.log(`[getVaultDepositedAmount] ${altMeta.symbol} OUTFLOWS (alternative deposit token):`);
-            altOuts.forEach(t => console.log(`  ${t.hash} - ${t.value} ${altMeta.symbol} to ${t.to}`));
             allTokenOuts = [...allTokenOuts, ...altOuts];
           }
         }
@@ -550,18 +532,6 @@ export async function getVaultDepositedAmount(
         totalDeposited += transfer.value ?? 0;
         matchedTxs.push(transfer.hash);
       }
-    }
-
-    console.log(`[getVaultDepositedAmount] ${underlyingMetadata.symbol}: depositTxs=${depositTxHashes.size}, matchedTxs=${matchedTxs.length}, totalDeposited=$${totalDeposited.toFixed(2)}`);
-
-    // Log unmatched deposit txs
-    const unmatchedTxs = Array.from(depositTxHashes).filter(h => !matchedTxs.includes(h));
-    if (unmatchedTxs.length > 0) {
-      console.log('[getVaultDepositedAmount] UNMATCHED DEPOSIT TXS (no token outflow found):');
-      unmatchedTxs.forEach(hash => {
-        const tx = shareReceives.find(t => t.hash === hash);
-        console.log(`  ${hash} - received ${tx?.value} shares (NO token outflow found!)`);
-      });
     }
 
     return { totalDeposited, underlyingAddress, underlyingDecimals };
@@ -631,10 +601,6 @@ export async function getPTCostBasis(
     // Get unique tx hashes where user received PT tokens (these are purchase txs)
     const purchaseTxHashes = new Set(ptReceives.map(t => t.hash));
 
-    console.log('[getPTCostBasis] Found PT receive txs:', purchaseTxHashes.size);
-    console.log('[getPTCostBasis] PT RECEIVE TXS:');
-    ptReceives.forEach(t => console.log(`  ${t.hash} - ${t.value} PT from ${t.from}`));
-
     if (purchaseTxHashes.size === 0) {
       return { totalCost: 0, purchaseTxCount: 0 };
     }
@@ -674,21 +640,8 @@ export async function getPTCostBasis(
         if (purchaseTxHashes.has(transfer.hash) && !matchedTxs.includes(transfer.hash)) {
           totalCost += transfer.value ?? 0;
           matchedTxs.push(transfer.hash);
-          console.log(`[getPTCostBasis] Matched: ${transfer.hash} - ${transfer.value} ${stable.symbol}`);
         }
       }
-    }
-
-    console.log(`[getPTCostBasis] purchaseTxs=${purchaseTxHashes.size}, matchedTxs=${matchedTxs.length}, totalCost=$${totalCost.toFixed(2)}`);
-
-    // Log unmatched purchase txs
-    const unmatchedTxs = Array.from(purchaseTxHashes).filter(h => !matchedTxs.includes(h));
-    if (unmatchedTxs.length > 0) {
-      console.log('[getPTCostBasis] UNMATCHED PT PURCHASE TXS (no stablecoin outflow found):');
-      unmatchedTxs.forEach(hash => {
-        const tx = ptReceives.find(t => t.hash === hash);
-        console.log(`  ${hash} - received ${tx?.value} PT (NO stablecoin outflow!)`);
-      });
     }
 
     return { totalCost, purchaseTxCount: matchedTxs.length };
@@ -747,9 +700,6 @@ export async function scanWalletTokens(
           const metadata = await getTokenMetadata(token.contractAddress, chain);
           const balanceRaw = hexToDecimal(token.tokenBalance);
           const decimals = metadata.decimals ?? 18;
-
-          // Debug log for token addresses
-          console.log(`Token: ${metadata.symbol} (${metadata.name}) - Address: ${token.contractAddress.toLowerCase()}`);
 
           allTokens.push({
             chain,
@@ -1044,16 +994,6 @@ export async function refreshTokenBalance(
     const metadata = await getTokenMetadata(tokenAddress, chain);
     const decimals = metadata.decimals ?? 18;
     const balance = formatBalance(balanceRaw, decimals);
-
-    console.log('[Balance Debug]', {
-      tokenAddress,
-      chain,
-      symbol: metadata.symbol,
-      decimals,
-      balanceRawHex: tokenData.tokenBalance,
-      balanceRaw: balanceRaw.toString(),
-      balanceFormatted: balance,
-    });
 
     // Get price from DeFiLlama
     const priceMap = await fetchTokenPrices([{ chain, tokenAddress }]);

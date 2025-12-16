@@ -261,8 +261,6 @@ export async function updatePositionInDb(
   if (updates.actualDepositedUsd !== undefined) updateData.actual_deposited_usd = updates.actualDepositedUsd;
   if ('useApyForYield' in updates) updateData.use_apy_for_yield = updates.useApyForYield ?? null;
 
-  console.log('[DB Update]', poolId, updateData);
-
   const { error } = await supabase
     .from('positions')
     .update(updateData)

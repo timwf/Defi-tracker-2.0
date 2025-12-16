@@ -31,6 +31,10 @@ export interface Pool {
   apyPct1D: number | null;
   apyPct7D: number | null;
   apyPct30D: number | null;
+  // Lending pool metrics (from poolsBorrow endpoint)
+  totalSupplyUsd?: number;
+  totalBorrowUsd?: number;
+  borrowable?: boolean;
 }
 
 export interface PoolsResponse {
@@ -53,7 +57,7 @@ export interface Filters {
 export type SortField =
   | 'symbol' | 'project' | 'chain' | 'tvlUsd' | 'apy' | 'apyBase'
   | 'apyReward' | 'apyMean30d' | 'apyPct1D' | 'apyPct7D' | 'apyPct30D'
-  | 'sigma' | 'stablecoin'
+  | 'sigma' | 'stablecoin' | 'utilization'
   // Historical data fields (require fetch)
   | 'base90' | 'volatility' | 'organicPct' | 'tvlChange30d';
 export type SortDirection = 'asc' | 'desc';

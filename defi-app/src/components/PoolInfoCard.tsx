@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react';
 import type { Pool, CalculatedMetrics, HeldPosition } from '../types/pool';
 import { getCachedData, getPoolMetrics } from '../utils/historicalData';
-import { formatTvl, formatApy, formatChange, formatSigma } from '../utils/filterPools';
+import { formatTvl, formatApy, formatSigma } from '../utils/filterPools';
 import { fetchUnderlyingTokenPrices, type UnderlyingTokenPrice } from '../utils/walletScanner';
 import { Sparkline } from './Sparkline';
 import { MetricInfo } from './MetricInfo';
+
+interface ProtocolUtilization {
+  utilization: number;
+  totalSupply?: number;
+  totalBorrow?: number;
+  source: string;
+}
 
 interface PoolInfoCardProps {
   pool: Pool;
@@ -22,6 +29,8 @@ interface PoolInfoCardProps {
   onRefreshWalletPosition?: (poolId: string) => Promise<void>;
   isRefreshing?: boolean;
   alerts?: PositionAlert[];
+  // Protocol-specific utilization (for vaults)
+  protocolUtilization?: ProtocolUtilization;
 }
 
 interface PositionAlert {
@@ -49,11 +58,15 @@ function getTvlHistory(poolId: string): number[] {
     .map(d => d.tvlUsd);
 }
 
-// Helper to get yesterday's APY
-function getYesterdayApy(poolId: string): number | null {
+// Helper to get historical TVL at specific days ago
+function getHistoricalTvl(poolId: string, daysAgo: number): number | null {
   const cached = getCachedData(poolId);
-  if (!cached?.data || cached.data.length < 2) return null;
-  return cached.data[cached.data.length - 2].apy;
+  if (!cached?.data || cached.data.length === 0) return null;
+
+  const targetIndex = cached.data.length - 1 - daysAgo;
+  if (targetIndex < 0) return null;
+
+  return cached.data[targetIndex]?.tvlUsd ?? null;
 }
 
 function formatCurrency(value: number): string {
@@ -89,6 +102,29 @@ function getTvlChangeColor(change: number | undefined): string {
   return 'text-red-400';
 }
 
+function getUtilizationColor(util: number | undefined): string {
+  if (util === undefined) return 'text-slate-500';
+  if (util < 50) return 'text-green-400';      // Low utilization - easy to withdraw
+  if (util < 80) return 'text-yellow-400';     // Moderate - normal
+  if (util < 95) return 'text-orange-400';     // High - harder to withdraw
+  return 'text-red-400';                        // Very high - withdrawal risk
+}
+
+function getUtilizationLabel(util: number | undefined): string {
+  if (util === undefined) return '';
+  if (util < 50) return 'low';
+  if (util < 80) return 'moderate';
+  if (util < 95) return 'high';
+  return 'very high';
+}
+
+function calculateUtilization(totalBorrowUsd: number | undefined, totalSupplyUsd: number | undefined): number | undefined {
+  if (totalBorrowUsd === undefined || totalSupplyUsd === undefined || totalSupplyUsd === 0) {
+    return undefined;
+  }
+  return (totalBorrowUsd / totalSupplyUsd) * 100;
+}
+
 export function PoolInfoCard({
   pool,
   mode,
@@ -103,6 +139,7 @@ export function PoolInfoCard({
   onRefreshWalletPosition,
   isRefreshing = false,
   alerts = [],
+  protocolUtilization,
 }: PoolInfoCardProps) {
   const [showTransactionHistory, setShowTransactionHistory] = useState(false);
   const [underlyingPrices, setUnderlyingPrices] = useState<UnderlyingTokenPrice[]>([]);
@@ -113,8 +150,6 @@ export function PoolInfoCard({
 
   const apyHistory = getApyHistory(pool.pool);
   const tvlHistory = getTvlHistory(pool.pool);
-  const yesterdayApy = getYesterdayApy(pool.pool);
-  const apyChange = yesterdayApy !== null ? pool.apy - yesterdayApy : null;
 
   // Fetch underlying token prices for stablecoin positions
   useEffect(() => {
@@ -152,7 +187,7 @@ export function PoolInfoCard({
     : null;
 
   return (
-    <div className={`bg-slate-800 rounded-lg overflow-hidden ${
+    <div className={`bg-slate-800 rounded-lg ${
       mode === 'portfolio'
         ? isWalletPosition
           ? 'ring-2 ring-purple-500/50'
@@ -161,7 +196,7 @@ export function PoolInfoCard({
     } ${alerts.some(a => a.type === 'danger') ? 'ring-2 ring-red-500/50' : ''}`}>
 
       {/* HEADER */}
-      <div className="p-4 border-b border-slate-700">
+      <div className="p-4 border-b border-slate-700 sticky top-0 z-10 bg-slate-800 rounded-t-lg">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -239,9 +274,9 @@ export function PoolInfoCard({
                 </div>
                 <div className="flex items-baseline gap-2 mt-2">
                   <span className="text-lg text-green-400">{formatApy(pool.apy)}</span>
-                  {apyChange !== null && (
-                    <span className={`text-xs ${apyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {apyChange >= 0 ? '↑' : '↓'} {Math.abs(apyChange).toFixed(2)}
+                  {pool.apyPct1D !== null && (
+                    <span className={`text-xs ${pool.apyPct1D >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {pool.apyPct1D >= 0 ? '↑' : '↓'} {Math.abs(pool.apyPct1D).toFixed(2)}
                     </span>
                   )}
                   <span className="text-xs text-slate-500">actual</span>
@@ -251,14 +286,14 @@ export function PoolInfoCard({
               <>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold text-green-400">{formatApy(pool.apy)}</span>
-                  {apyChange !== null && (
-                    <span className={`text-sm font-medium ${apyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {apyChange >= 0 ? '↑' : '↓'} {Math.abs(apyChange).toFixed(2)}
+                  {pool.apyPct1D !== null && (
+                    <span className={`text-sm font-medium ${pool.apyPct1D >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {pool.apyPct1D >= 0 ? '↑' : '↓'} {Math.abs(pool.apyPct1D).toFixed(2)}
                     </span>
                   )}
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
-                  Current APY {apyChange !== null && <span className="text-slate-600">vs yesterday</span>}
+                  Current APY {pool.apyPct1D !== null && <span className="text-slate-600">vs yesterday</span>}
                 </div>
               </>
             )}
@@ -319,24 +354,24 @@ export function PoolInfoCard({
           )}
         </div>
 
-        {/* Change Pills */}
+        {/* Historical APY Pills */}
         <div className="grid grid-cols-3 gap-2 mt-4">
           <div className="bg-slate-900/50 rounded px-2 py-1.5 text-center">
             <div className="text-xs text-slate-500">1D</div>
-            <div className={`text-sm font-medium ${formatChange(pool.apyPct1D ?? apyChange).color}`}>
-              {formatChange(pool.apyPct1D ?? apyChange).text}
+            <div className={`text-sm font-medium ${pool.apyPct1D === null ? 'text-slate-500' : pool.apyPct1D >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {pool.apyPct1D !== null ? `${(pool.apy - pool.apyPct1D).toFixed(2)}%` : '-'}
             </div>
           </div>
           <div className="bg-slate-900/50 rounded px-2 py-1.5 text-center">
             <div className="text-xs text-slate-500">7D</div>
-            <div className={`text-sm font-medium ${formatChange(pool.apyPct7D).color}`}>
-              {formatChange(pool.apyPct7D).text}
+            <div className={`text-sm font-medium ${pool.apyPct7D === null ? 'text-slate-500' : pool.apyPct7D >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {pool.apyPct7D !== null ? `${(pool.apy - pool.apyPct7D).toFixed(2)}%` : '-'}
             </div>
           </div>
           <div className="bg-slate-900/50 rounded px-2 py-1.5 text-center">
             <div className="text-xs text-slate-500">30D</div>
-            <div className={`text-sm font-medium ${formatChange(pool.apyPct30D).color}`}>
-              {formatChange(pool.apyPct30D).text}
+            <div className={`text-sm font-medium ${pool.apyPct30D === null ? 'text-slate-500' : pool.apyPct30D >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {pool.apyPct30D !== null ? `${(pool.apy - pool.apyPct30D).toFixed(2)}%` : '-'}
             </div>
           </div>
         </div>
@@ -432,6 +467,37 @@ export function PoolInfoCard({
           )}
         </div>
 
+        {/* Historical TVL Pills */}
+        {(() => {
+          const tvl1d = getHistoricalTvl(pool.pool, 1);
+          const tvl7d = getHistoricalTvl(pool.pool, 7);
+          const tvl30d = getHistoricalTvl(pool.pool, 30);
+          const currentTvl = pool.tvlUsd;
+
+          return (
+            <div className="grid grid-cols-3 gap-2 mt-4">
+              <div className="bg-slate-900/50 rounded px-2 py-1.5 text-center">
+                <div className="text-xs text-slate-500">1D</div>
+                <div className={`text-sm font-medium ${tvl1d === null ? 'text-slate-500' : currentTvl >= tvl1d ? 'text-green-400' : 'text-red-400'}`}>
+                  {tvl1d !== null ? formatTvl(tvl1d) : '-'}
+                </div>
+              </div>
+              <div className="bg-slate-900/50 rounded px-2 py-1.5 text-center">
+                <div className="text-xs text-slate-500">7D</div>
+                <div className={`text-sm font-medium ${tvl7d === null ? 'text-slate-500' : currentTvl >= tvl7d ? 'text-green-400' : 'text-red-400'}`}>
+                  {tvl7d !== null ? formatTvl(tvl7d) : '-'}
+                </div>
+              </div>
+              <div className="bg-slate-900/50 rounded px-2 py-1.5 text-center">
+                <div className="text-xs text-slate-500">30D</div>
+                <div className={`text-sm font-medium ${tvl30d === null ? 'text-slate-500' : currentTvl >= tvl30d ? 'text-green-400' : 'text-red-400'}`}>
+                  {tvl30d !== null ? formatTvl(tvl30d) : '-'}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Health stats row */}
         <div className="grid grid-cols-3 gap-3 mt-4 text-sm">
           <div className="group">
@@ -462,6 +528,93 @@ export function PoolInfoCard({
             </div>
           </div>
         </div>
+
+        {/* Utilization (lending pools and vaults) */}
+        {(() => {
+          // Use protocol-specific utilization if available, otherwise fall back to DeFi Llama data
+          const defiLlamaUtil = calculateUtilization(pool.totalBorrowUsd, pool.totalSupplyUsd);
+          const utilization = protocolUtilization?.utilization ?? defiLlamaUtil;
+          const source = protocolUtilization ? protocolUtilization.source : 'defillama';
+          const totalBorrow = protocolUtilization?.totalBorrow ?? pool.totalBorrowUsd;
+          const totalSupply = protocolUtilization?.totalSupply ?? pool.totalSupplyUsd;
+
+          if (utilization === undefined) return null;
+
+          // Ring SVG parameters
+          const size = 56;
+          const strokeWidth = 5;
+          const radius = (size - strokeWidth) / 2;
+          const circumference = 2 * Math.PI * radius;
+          const progress = Math.min(utilization, 100) / 100;
+          const strokeDashoffset = circumference * (1 - progress);
+          const ringColor = utilization < 50 ? '#22c55e' :
+                           utilization < 80 ? '#eab308' :
+                           utilization < 95 ? '#f97316' : '#ef4444';
+
+          return (
+            <div className="mt-4 pt-3 border-t border-slate-700/50">
+              <div className="flex items-center gap-4">
+                {/* Utilization Ring */}
+                <div className="relative flex-shrink-0">
+                  <svg width={size} height={size} className="transform -rotate-90">
+                    {/* Background ring */}
+                    <circle
+                      cx={size / 2}
+                      cy={size / 2}
+                      r={radius}
+                      fill="none"
+                      stroke="#334155"
+                      strokeWidth={strokeWidth}
+                    />
+                    {/* Progress ring */}
+                    <circle
+                      cx={size / 2}
+                      cy={size / 2}
+                      r={radius}
+                      fill="none"
+                      stroke={ringColor}
+                      strokeWidth={strokeWidth}
+                      strokeLinecap="round"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={strokeDashoffset}
+                      className="transition-all duration-500"
+                    />
+                  </svg>
+                  {/* Center text */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className={`text-xs font-bold ${getUtilizationColor(utilization)}`}>
+                      {utilization.toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Labels */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-300 text-sm font-medium">Utilization</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                      utilization < 50 ? 'bg-green-900/50 text-green-400' :
+                      utilization < 80 ? 'bg-yellow-900/50 text-yellow-400' :
+                      utilization < 95 ? 'bg-orange-900/50 text-orange-400' :
+                      'bg-red-900/50 text-red-400'
+                    }`}>
+                      {getUtilizationLabel(utilization)}
+                    </span>
+                    {source !== 'defillama' && (
+                      <span className="text-xs text-slate-600">({source})</span>
+                    )}
+                  </div>
+                  {totalBorrow !== undefined && totalSupply !== undefined && (
+                    <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                      <span>Borrowed: {formatTvl(totalBorrow)}</span>
+                      <span>Supply: {formatTvl(totalSupply)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* PORTFOLIO SECTION (only in portfolio mode) */}
