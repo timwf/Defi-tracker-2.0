@@ -565,7 +565,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
     setSaving(true);
     try {
-      const success = await updatePositionInDb(editingId, {
+      await updatePositionInDb(editingId, {
         amountUsd: amount,
         notes: editNotes || undefined,
         fixedApy: fixedApyValue === null ? undefined : (isNaN(fixedApyValue) ? undefined : fixedApyValue),
