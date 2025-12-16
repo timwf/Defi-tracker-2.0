@@ -1,6 +1,6 @@
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 interface NavHeaderProps {
   poolCount: number;
@@ -31,6 +31,8 @@ export function NavHeader({
 }: NavHeaderProps) {
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const lastScrollY = useRef(0);
 
   // Remember the last pools search params in sessionStorage
   useEffect(() => {
@@ -38,6 +40,38 @@ export function NavHeader({
       sessionStorage.setItem(POOLS_SEARCH_KEY, location.search);
     }
   }, [location]);
+
+  // Hide header on scroll down, show on scroll up (mobile only)
+  useEffect(() => {
+    const handleScroll = () => {
+      // Only apply on mobile (< 640px)
+      if (window.innerWidth >= 640) {
+        setIsHeaderVisible(true);
+        return;
+      }
+
+      const currentScrollY = window.scrollY;
+      const scrollDiff = currentScrollY - lastScrollY.current;
+
+      // Show header when near top of page
+      if (currentScrollY < 50) {
+        setIsHeaderVisible(true);
+      }
+      // Hide on scroll down (more than 10px)
+      else if (scrollDiff > 10) {
+        setIsHeaderVisible(false);
+      }
+      // Show on scroll up (more than 10px)
+      else if (scrollDiff < -10) {
+        setIsHeaderVisible(true);
+      }
+
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Build the pools link - preserve search params when navigating back
   const getPoolsLink = () => {
@@ -49,7 +83,11 @@ export function NavHeader({
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-slate-900 -mx-4 px-4 py-3 mb-4 sm:mb-6 sm:static sm:mx-0 sm:px-0 sm:py-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <header
+      className={`sticky top-0 z-50 bg-slate-900 -mx-4 px-4 py-3 mb-4 sm:mb-6 sm:static sm:mx-0 sm:px-0 sm:py-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 transition-transform duration-300 ${
+        isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+      } sm:translate-y-0`}
+    >
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-white">DeFi Yield Tracker</h1>
         <div className="flex items-center gap-2 text-xs sm:text-sm">
