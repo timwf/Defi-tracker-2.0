@@ -1088,7 +1088,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                       >
                         <td className="py-2 px-3">
                           <span className="text-white font-medium">{pool.symbol}</span>
-                          <span className="text-slate-500 text-xs ml-1 hidden sm:inline">{pool.project}</span>
+                          <span className="text-slate-500 text-xs ml-1">{pool.project}</span>
                         </td>
                         <td className="py-2 px-3">
                           {(() => {
