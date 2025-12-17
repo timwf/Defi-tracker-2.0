@@ -7,12 +7,15 @@ import { refreshTokenBalance, getAllTokenTransfers, getVaultUnderlyingValue, get
 import { downloadPortfolioJson } from '../utils/exportPortfolio';
 import { formatTvl } from '../utils/filterPools';
 import { fetchAllUtilization } from '../utils/protocolUtilization';
+import { fetchCategories, type Category } from '../utils/categories';
 import { MetricInfo } from '../components/MetricInfo';
 import { PoolSearchInput } from '../components/PoolSearchInput';
 import { PoolInfoCard } from '../components/PoolInfoCard';
 import { PriceWatchlist } from '../components/PriceWatchlist';
 import { WalletImportModal } from '../components/WalletImportModal';
 import { UnmappedPositionsList } from '../components/UnmappedPositionsList';
+import { CategoryManager } from '../components/CategoryManager';
+import { CategorySelector } from '../components/CategorySelector';
 
 interface PortfolioProps {
   positions: HeldPosition[];
@@ -63,6 +66,12 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   // Wallet import state
   const [showWalletImport, setShowWalletImport] = useState(false);
   const [unmappedPositions, setUnmappedPositions] = useState<UnmappedPosition[]>([]);
+
+  // Category state
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [editCategoryId, setEditCategoryId] = useState<string | undefined>(undefined);
+  const [filterCategoryId, setFilterCategoryId] = useState<string | 'all' | 'uncategorized'>('all');
 
   // Protocol utilization state
   const [utilizationData, setUtilizationData] = useState<Map<string, { utilization: number; totalSupply?: number; totalBorrow?: number; source: string }>>(new Map());
@@ -151,9 +160,17 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       .filter((x): x is PositionWithPool => x !== null);
   }, [positions, pools]);
 
-  // Sorted positions for display
+  // Filtered and sorted positions for display
   const sortedPositions = useMemo(() => {
-    return [...positionsWithPools].sort((a, b) => {
+    // First filter by category
+    let filtered = positionsWithPools;
+    if (filterCategoryId === 'uncategorized') {
+      filtered = positionsWithPools.filter(({ position }) => !position.categoryId);
+    } else if (filterCategoryId !== 'all') {
+      filtered = positionsWithPools.filter(({ position }) => position.categoryId === filterCategoryId);
+    }
+
+    return [...filtered].sort((a, b) => {
       let aVal: string | number;
       let bVal: string | number;
 
@@ -199,7 +216,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
       return 0;
     });
-  }, [positionsWithPools, portfolioSortField, portfolioSortDirection]);
+  }, [positionsWithPools, portfolioSortField, portfolioSortDirection, filterCategoryId]);
 
   const handlePortfolioSort = (field: PortfolioSortField) => {
     if (field === portfolioSortField) {
@@ -377,6 +394,20 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       setUnmappedPositions(unmapped);
     } catch (err) {
       console.error('Failed to load unmapped positions:', err);
+    }
+  };
+
+  // Load categories on mount
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      const cats = await fetchCategories();
+      setCategories(cats);
+    } catch (err) {
+      console.error('Failed to load categories:', err);
     }
   };
 
@@ -674,6 +705,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     setEditFixedApy(position.fixedApy?.toString() || '');
     setEditIsShareBased(position.isShareBased || false);
     setEditUseApyForYield(position.useApyForYield || false);
+    setEditCategoryId(position.categoryId);
   };
 
   const handleSaveEdit = async () => {
@@ -692,11 +724,13 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         fixedApy: fixedApyValue === null ? undefined : (isNaN(fixedApyValue) ? undefined : fixedApyValue),
         isShareBased: editIsShareBased,
         useApyForYield: editUseApyForYield,
+        categoryId: editCategoryId,
       });
       if (onRefreshPositions) {
         await onRefreshPositions();
       }
       setEditingId(null);
+      setEditCategoryId(undefined);
     } finally {
       setSaving(false);
     }
@@ -966,7 +1000,34 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
             onPositionDeleted={() => loadUnmappedPositions()}
           />
 
-          <h2 className="text-lg font-semibold text-white">Positions ({positionsWithPools.length})</h2>
+          {/* Positions header with category filter */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-white">Positions ({positionsWithPools.length})</h2>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-slate-400">Filter:</label>
+              <select
+                value={filterCategoryId}
+                onChange={(e) => setFilterCategoryId(e.target.value as typeof filterCategoryId)}
+                className="appearance-none px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              >
+                <option value="all">All Categories</option>
+                <option value="uncategorized">Uncategorized</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => setShowCategoryManager(true)}
+                className="p-1.5 text-slate-400 hover:text-white bg-slate-700 border border-slate-600 rounded transition-colors"
+                title="Manage categories"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+            </div>
+          </div>
 
           {/* Summary Table */}
           {positionsWithPools.length > 0 && (
@@ -1133,6 +1194,16 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                             />
                           </div>
                         </div>
+                        {/* Category selector */}
+                        <div className="mt-3">
+                          <label className="text-xs text-slate-400 block mb-1">Category</label>
+                          <CategorySelector
+                            categories={categories}
+                            selectedCategoryId={editCategoryId}
+                            onSelect={setEditCategoryId}
+                            onManageCategories={() => setShowCategoryManager(true)}
+                          />
+                        </div>
                         {/* Share-based vault toggle - only show for wallet positions */}
                         {position.source === 'wallet' && (
                           <div className="mt-3 p-3 bg-slate-700/50 rounded-lg space-y-3">
@@ -1200,6 +1271,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                         onRefreshWalletPosition={handleRefreshWalletPosition}
                         isRefreshing={refreshingPoolId === position.poolId}
                         protocolUtilization={utilizationData.get(position.poolId)}
+                        category={categories.find(c => c.id === position.categoryId)}
                       />
                     )}
                   </div>
@@ -1414,6 +1486,15 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         onClose={() => setShowWalletImport(false)}
         onImportComplete={() => loadUnmappedPositions()}
       />
+
+      {/* Category Manager Modal */}
+      {showCategoryManager && (
+        <CategoryManager
+          categories={categories}
+          onCategoriesChange={loadCategories}
+          onClose={() => setShowCategoryManager(false)}
+        />
+      )}
     </div>
   );
 }

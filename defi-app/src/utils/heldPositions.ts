@@ -37,6 +37,7 @@ function addLocalPosition(params: {
   tokenAddress?: string;
   tokenBalance?: number;
   tokenSymbol?: string | null;
+  categoryId?: string;
 }): HeldPosition {
   const positions = getLocalPositions();
   const newPosition: HeldPosition = {
@@ -51,6 +52,7 @@ function addLocalPosition(params: {
     tokenAddress: params.tokenAddress,
     tokenBalance: params.tokenBalance,
     tokenSymbol: params.tokenSymbol || undefined,
+    categoryId: params.categoryId,
   };
   positions.unshift(newPosition);
   saveLocalPositions(positions);
@@ -138,6 +140,7 @@ export async function fetchPositions(): Promise<HeldPosition[]> {
     underlyingValue: row.underlying_value ? Number(row.underlying_value) : undefined,
     actualDepositedUsd: row.actual_deposited_usd ? Number(row.actual_deposited_usd) : undefined,
     useApyForYield: row.use_apy_for_yield ?? undefined,
+    categoryId: row.category_id || undefined,
   }));
 }
 
@@ -152,6 +155,7 @@ export async function addPositionToDb(params: {
   tokenAddress?: string;
   tokenBalance?: number;
   tokenSymbol?: string | null;
+  categoryId?: string;
 }): Promise<HeldPosition | null> {
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -174,6 +178,7 @@ export async function addPositionToDb(params: {
       token_address: params.tokenAddress || null,
       token_balance: params.tokenBalance ?? null,
       token_symbol: params.tokenSymbol || null,
+      category_id: params.categoryId || null,
     })
     .select()
     .single();
@@ -195,6 +200,7 @@ export async function addPositionToDb(params: {
     tokenAddress: data.token_address || undefined,
     tokenBalance: data.token_balance ? Number(data.token_balance) : undefined,
     tokenSymbol: data.token_symbol || undefined,
+    categoryId: data.category_id || undefined,
   };
 }
 
@@ -260,6 +266,7 @@ export async function updatePositionInDb(
   if (updates.underlyingValue !== undefined) updateData.underlying_value = updates.underlyingValue;
   if (updates.actualDepositedUsd !== undefined) updateData.actual_deposited_usd = updates.actualDepositedUsd;
   if ('useApyForYield' in updates) updateData.use_apy_for_yield = updates.useApyForYield ?? null;
+  if ('categoryId' in updates) updateData.category_id = updates.categoryId || null;
 
   const { error } = await supabase
     .from('positions')

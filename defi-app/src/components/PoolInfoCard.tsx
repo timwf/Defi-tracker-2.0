@@ -3,6 +3,7 @@ import type { Pool, CalculatedMetrics, HeldPosition } from '../types/pool';
 import { getCachedData, getPoolMetrics } from '../utils/historicalData';
 import { formatTvl, formatApy, formatSigma } from '../utils/filterPools';
 import { fetchUnderlyingTokenPrices, type UnderlyingTokenPrice } from '../utils/walletScanner';
+import type { Category } from '../utils/categories';
 import { Sparkline } from './Sparkline';
 import { MetricInfo } from './MetricInfo';
 
@@ -31,6 +32,8 @@ interface PoolInfoCardProps {
   alerts?: PositionAlert[];
   // Protocol-specific utilization (for vaults)
   protocolUtilization?: ProtocolUtilization;
+  // Category for position organization
+  category?: Category;
 }
 
 interface PositionAlert {
@@ -140,6 +143,7 @@ export function PoolInfoCard({
   isRefreshing = false,
   alerts = [],
   protocolUtilization,
+  category,
 }: PoolInfoCardProps) {
   const [showTransactionHistory, setShowTransactionHistory] = useState(false);
   const [underlyingPrices, setUnderlyingPrices] = useState<UnderlyingTokenPrice[]>([]);
@@ -214,7 +218,7 @@ export function PoolInfoCard({
             <div className="text-sm text-slate-400 mt-0.5">
               {pool.project} · {pool.chain}
             </div>
-            {badges.length > 0 && (
+            {(badges.length > 0 || category) && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {badges.map(badge => (
                   <span
@@ -230,6 +234,22 @@ export function PoolInfoCard({
                     {badge}
                   </span>
                 ))}
+                {category && (
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
+                    style={{
+                      backgroundColor: `${category.color}20`,
+                      color: category.color,
+                      border: `1px solid ${category.color}40`,
+                    }}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: category.color }}
+                    />
+                    {category.name}
+                  </span>
+                )}
               </div>
             )}
           </div>

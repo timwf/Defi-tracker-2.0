@@ -133,6 +133,8 @@ export interface HeldPosition {
   actualDepositedUsd?: number;  // Actual underlying tokens deposited to vault (from on-chain transfers)
   // Yield calculation override
   useApyForYield?: boolean;     // Use APY-based yield calculation instead of deposit tracking (uses fixedApy if set, else pool.apy)
+  // Category assignment
+  categoryId?: string;          // User-defined category for organization
 }
 
 // Scanned token from wallet
