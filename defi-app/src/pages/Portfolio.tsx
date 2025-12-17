@@ -1041,9 +1041,6 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                     >
                       Pool {portfolioSortField === 'symbol' && (portfolioSortDirection === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="text-left py-2 px-3 font-medium">
-                      Category
-                    </th>
                     <th
                       className="text-right py-2 px-3 font-medium cursor-pointer hover:text-white select-none"
                       onClick={() => handlePortfolioSort('amount')}
@@ -1087,30 +1084,25 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                         onClick={scrollToCard}
                       >
                         <td className="py-2 px-3">
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-white font-medium">{pool.symbol}</span>
-                            <span className="text-slate-500 text-xs hidden sm:inline">{pool.project}</span>
+                          <div className="flex items-center gap-1.5">
+                            {(() => {
+                              const cat = categories.find(c => c.id === position.categoryId);
+                              return cat ? (
+                                <span
+                                  className="w-2 h-2 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: cat.color }}
+                                  title={cat.name}
+                                />
+                              ) : null;
+                            })()}
+                            <div>
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-white font-medium">{pool.symbol}</span>
+                                <span className="text-slate-500 text-xs hidden sm:inline">{pool.project}</span>
+                              </div>
+                              <div className="text-slate-500 text-xs sm:hidden">{pool.project} · {pool.chain}</div>
+                            </div>
                           </div>
-                          <div className="text-slate-500 text-xs sm:hidden">{pool.project} · {pool.chain}</div>
-                        </td>
-                        <td className="py-2 px-3">
-                          {(() => {
-                            const cat = categories.find(c => c.id === position.categoryId);
-                            return cat ? (
-                              <span
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs"
-                                style={{
-                                  backgroundColor: `${cat.color}20`,
-                                  color: cat.color,
-                                }}
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cat.color }} />
-                                {cat.name}
-                              </span>
-                            ) : (
-                              <span className="text-slate-600 text-xs">-</span>
-                            );
-                          })()}
                         </td>
                         <td className="text-right py-2 px-3 text-slate-300">
                           {formatCurrency(position.amountUsd)}
