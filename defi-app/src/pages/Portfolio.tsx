@@ -1087,8 +1087,11 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                         onClick={scrollToCard}
                       >
                         <td className="py-2 px-3">
-                          <span className="text-white font-medium">{pool.symbol}</span>
-                          <span className="text-slate-500 text-xs ml-1">{pool.project}</span>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-white font-medium">{pool.symbol}</span>
+                            <span className="text-slate-500 text-xs hidden sm:inline">{pool.project}</span>
+                          </div>
+                          <div className="text-slate-500 text-xs sm:hidden">{pool.project} · {pool.chain}</div>
                         </td>
                         <td className="py-2 px-3">
                           {(() => {
