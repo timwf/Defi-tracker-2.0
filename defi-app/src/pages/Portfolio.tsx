@@ -515,6 +515,11 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                     updates.underlyingValue = vaultResult.underlyingValue;
                     // Use underlying value for USD amount (assuming stablecoin = $1)
                     updates.amountUsd = vaultResult.underlyingValue;
+                  } else if (pool.stablecoin) {
+                    // Fallback for stablecoin vaults: use token balance as USD value
+                    // This is approximate but better than using stale values
+                    updates.amountUsd = result.balance;
+                    console.warn('Using token balance as USD fallback for stablecoin vault:', pos.poolId);
                   }
 
                   // Get actual deposited amount by tracking underlying token transfers TO the vault
@@ -811,6 +816,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
               updates.underlyingValue = vaultResult.underlyingValue;
               // Use underlying value for USD amount (assuming stablecoin = $1)
               updates.amountUsd = vaultResult.underlyingValue;
+            } else if (pool.stablecoin) {
+              // Fallback for stablecoin vaults: use token balance as USD value
+              updates.amountUsd = result.balance;
+              console.warn('Using token balance as USD fallback for stablecoin vault:', poolId);
             }
 
             // Get actual deposited amount by tracking underlying token transfers TO the vault
