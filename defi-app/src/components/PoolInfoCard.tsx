@@ -693,17 +693,23 @@ export function PoolInfoCard({
           </div>
 
           {/* Yield Tracking Section */}
-          {(position.firstAcquiredAt || position.entryDate || position.transactions || position.initialTokenBalance) && (
+          {(position.firstAcquiredAt || position.entryDate || position.transactions || position.initialTokenBalance || position.initialAmountUsd) && (
             (() => {
               // Use user's isShareBased setting
               const isShareBased = position.isShareBased || false;
               // Detect Pendle PT tokens by project name or symbol prefix
               const isPendlePT = pool.project === 'pendle' || position.tokenSymbol?.startsWith('PT-');
+              // Detect manual positions (no wallet/token tracking)
+              const isManualPosition = position.source !== 'wallet' && !position.tokenAddress;
 
               // Calculate deposited USD amount
               const useApyForYield = position.useApyForYield || false;
               let depositedUsd: number | null = null;
-              if ((isShareBased && pool.stablecoin) || isPendlePT) {
+
+              if (isManualPosition && position.initialAmountUsd) {
+                // Manual position: use initialAmountUsd directly
+                depositedUsd = position.initialAmountUsd;
+              } else if ((isShareBased && pool.stablecoin) || isPendlePT) {
                 // For share-based stablecoin vaults or Pendle PT: use actualDepositedUsd or initialTokenBalance
                 depositedUsd = position.actualDepositedUsd ?? (pool.stablecoin ? position.initialTokenBalance : null) ?? null;
               } else if (pool.stablecoin && position.initialTokenBalance) {
@@ -731,6 +737,10 @@ export function PoolInfoCard({
               const apyForCalc = position.fixedApy ?? pool.apy;
               let apyBasedYield: number | null = null;
 
+              // Determine start timestamp for yield calculation
+              const startTimestamp = position.firstAcquiredAt ||
+                (position.entryDate ? new Date(position.entryDate).getTime() : null);
+
               if (useApyForYield && position.transactions && position.transactions.length > 0) {
                 // Calculate yield per deposit based on when each was made
                 const now = Date.now();
@@ -747,23 +757,26 @@ export function PoolInfoCard({
                   }
                   return total;
                 }, 0);
-              } else if (useApyForYield && depositedUsd) {
-                // Fallback: use total deposited with first deposit date
-                const daysHeld = position.firstAcquiredAt
-                  ? Math.floor((Date.now() - position.firstAcquiredAt) / (1000 * 60 * 60 * 24))
-                  : 0;
+              } else if ((useApyForYield || isManualPosition) && depositedUsd && startTimestamp) {
+                // Use total deposited with start date (works for both wallet and manual positions)
+                const daysHeld = Math.floor((Date.now() - startTimestamp) / (1000 * 60 * 60 * 24));
                 if (daysHeld > 0) {
                   apyBasedYield = depositedUsd * (apyForCalc / 100) * (daysHeld / 365);
                 }
               }
 
-              // Use APY-based yield if enabled, otherwise use tracking yield
-              const yieldUsd = useApyForYield && apyBasedYield !== null ? apyBasedYield : trackingYieldUsd;
+              // Use APY-based yield if enabled or for manual positions, otherwise use tracking yield
+              const yieldUsd = (useApyForYield || isManualPosition) && apyBasedYield !== null ? apyBasedYield : trackingYieldUsd;
 
               // For rebasing tokens, yield = token difference
               const yieldTokens = position.tokenBalance && position.initialTokenBalance
                 ? position.tokenBalance - position.initialTokenBalance
                 : null;
+
+              // Calculate days held for display
+              const daysHeld = startTimestamp
+                ? Math.floor((Date.now() - startTimestamp) / (1000 * 60 * 60 * 24))
+                : 0;
 
               return (
                 <div className="mt-4 pt-3 border-t border-slate-700/50">
@@ -796,8 +809,37 @@ export function PoolInfoCard({
                     </div>
                   )}
 
-                  {/* Yield Display - Different for share-based vs rebasing */}
-                  {isShareBased && pool.stablecoin ? (
+                  {/* Yield Display - Different for manual, share-based, and rebasing */}
+                  {isManualPosition ? (
+                    // Manual position: show USD-based yield from APY calculation
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <div>
+                        <div className="text-slate-500 text-xs">Initial Value</div>
+                        <div className="text-slate-300">
+                          {depositedUsd ? formatCurrency(depositedUsd) : '-'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500 text-xs">Current Value</div>
+                        <div className="text-slate-300">
+                          {formatCurrency(position.amountUsd)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500 text-xs">Est. Earned</div>
+                        {apyBasedYield !== null ? (
+                          <div className={apyBasedYield >= 0 ? 'text-green-400' : 'text-red-400'}>
+                            {apyBasedYield >= 0 ? '+' : ''}{formatCurrency(apyBasedYield)}
+                            <div className="text-orange-400 text-xs mt-0.5">
+                              via {apyForCalc.toFixed(1)}% APY
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-slate-500">-</div>
+                        )}
+                      </div>
+                    </div>
+                  ) : isShareBased && pool.stablecoin ? (
                     // Share-based vault: show USD values
                     <div className="grid grid-cols-3 gap-3 text-sm">
                       <div>
@@ -886,11 +928,11 @@ export function PoolInfoCard({
                   )}
 
                   <div className="text-xs text-slate-500 mt-2">
-                    {position.firstAcquiredAt && (
+                    {startTimestamp && (
                       <span>
-                        First deposit: {new Date(position.firstAcquiredAt).toLocaleDateString()}
+                        {isManualPosition ? 'Started' : 'First deposit'}: {new Date(startTimestamp).toLocaleDateString()}
                         <span className="ml-2">
-                          · Held {Math.floor((Date.now() - position.firstAcquiredAt) / (1000 * 60 * 60 * 24))} days
+                          · Held {daysHeld} days
                         </span>
                       </span>
                     )}
