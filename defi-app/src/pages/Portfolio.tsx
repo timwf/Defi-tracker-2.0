@@ -50,6 +50,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [editFixedApy, setEditFixedApy] = useState('');
   const [editIsShareBased, setEditIsShareBased] = useState(false);
   const [editUseApyForYield, setEditUseApyForYield] = useState(false);
+  const [editEntryDate, setEditEntryDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
   const [refreshingPoolId, setRefreshingPoolId] = useState<string | null>(null);
@@ -268,8 +269,11 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     console.log('=== YIELD CALCULATION DEBUG ===');
 
     positionsWithPools.forEach(({ position, pool }) => {
+      // Check if this is a manual position (no wallet/token tracking)
+      const isManualPosition = position.source !== 'wallet' && !position.tokenAddress;
+
       // Only count if position has yield tracking data
-      if (!position.firstAcquiredAt && !position.entryDate && !position.transactions && !position.initialTokenBalance) {
+      if (!position.firstAcquiredAt && !position.entryDate && !position.transactions && !position.initialTokenBalance && !position.initialAmountUsd) {
         console.log(`${pool.symbol}: SKIPPED (no tracking data)`);
         return;
       }
@@ -280,7 +284,11 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
       // Calculate deposited amount
       let depositedUsd: number | null = null;
-      if ((isShareBased && pool.stablecoin) || isPendlePT) {
+
+      if (isManualPosition && position.initialAmountUsd) {
+        // Manual position: use initialAmountUsd directly
+        depositedUsd = position.initialAmountUsd;
+      } else if ((isShareBased && pool.stablecoin) || isPendlePT) {
         depositedUsd = position.actualDepositedUsd ?? (pool.stablecoin ? position.initialTokenBalance : null) ?? null;
       } else if (pool.stablecoin && position.initialTokenBalance) {
         depositedUsd = position.initialTokenBalance;
@@ -308,6 +316,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       const apyForCalc = position.fixedApy ?? pool.apy;
       let apyBasedYield: number | null = null;
 
+      // Determine start timestamp for yield calculation
+      const startTimestamp = position.firstAcquiredAt ||
+        (position.entryDate ? new Date(position.entryDate).getTime() : null);
+
       if (useApyForYield && position.transactions && position.transactions.length > 0) {
         // Calculate yield per deposit based on when each was made
         const now = Date.now();
@@ -324,11 +336,9 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
           }
           return total;
         }, 0);
-      } else if (useApyForYield && depositedUsd) {
-        // Fallback: use total deposited with first deposit date
-        const daysHeld = position.firstAcquiredAt
-          ? Math.floor((Date.now() - position.firstAcquiredAt) / (1000 * 60 * 60 * 24))
-          : 0;
+      } else if ((useApyForYield || isManualPosition) && depositedUsd && startTimestamp) {
+        // Use total deposited with start date (works for both wallet and manual positions)
+        const daysHeld = Math.floor((Date.now() - startTimestamp) / (1000 * 60 * 60 * 24));
         if (daysHeld > 0) {
           apyBasedYield = depositedUsd * (apyForCalc / 100) * (daysHeld / 365);
         }
@@ -338,6 +348,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         isShareBased,
         isPendlePT,
         useApyForYield,
+        isManualPosition,
         stablecoin: pool.stablecoin,
         depositedUsd,
         currentUsd,
@@ -345,17 +356,25 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         apyBasedYield,
         tokenBalance: position.tokenBalance,
         initialTokenBalance: position.initialTokenBalance,
+        initialAmountUsd: position.initialAmountUsd,
         underlyingValue: position.underlyingValue,
         actualDepositedUsd: position.actualDepositedUsd,
         amountUsd: position.amountUsd,
+        startTimestamp,
         // Raw position data for debugging
         rawPosition: position,
       });
 
       let yieldContribution = 0;
 
-      // For share-based stablecoin vaults
-      if (isShareBased && pool.stablecoin) {
+      // For manual positions: use APY-based yield
+      if (isManualPosition) {
+        if (apyBasedYield !== null) {
+          yieldContribution = apyBasedYield;
+          console.log(`  -> Manual position APY-based yield: ${apyBasedYield}`);
+        }
+      } else if (isShareBased && pool.stablecoin) {
+        // For share-based stablecoin vaults
         const yieldUsd = useApyForYield && apyBasedYield !== null ? apyBasedYield : trackingYieldUsd;
         if (yieldUsd !== null) {
           yieldContribution = yieldUsd;
@@ -711,6 +730,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     setEditIsShareBased(position.isShareBased || false);
     setEditUseApyForYield(position.useApyForYield || false);
     setEditCategoryId(position.categoryId);
+    // For entry date: use entryDate string, or convert firstAcquiredAt to date string
+    const entryDateStr = position.entryDate ||
+      (position.firstAcquiredAt ? new Date(position.firstAcquiredAt).toISOString().split('T')[0] : '');
+    setEditEntryDate(entryDateStr);
   };
 
   const handleSaveEdit = async () => {
@@ -721,6 +744,20 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     // If empty string, explicitly set to undefined to clear the fixed APY
     const fixedApyValue = editFixedApy.trim() === '' ? null : parseFloat(editFixedApy);
 
+    // Get current position to check if this is manual and if we need to set initial amount
+    const currentPosition = positions.find(p => p.poolId === editingId);
+    const isManual = currentPosition?.source !== 'wallet';
+
+    // Calculate firstAcquiredAt from entry date for manual positions
+    const firstAcquiredAt = editEntryDate
+      ? new Date(editEntryDate).getTime()
+      : undefined;
+
+    // For manual positions: if entry date is set and no initial amount exists, use current amount
+    const initialAmountUsd = isManual && editEntryDate && !currentPosition?.initialAmountUsd
+      ? amount
+      : undefined;
+
     setSaving(true);
     try {
       await updatePositionInDb(editingId, {
@@ -728,8 +765,11 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         notes: editNotes || undefined,
         fixedApy: fixedApyValue === null ? undefined : (isNaN(fixedApyValue) ? undefined : fixedApyValue),
         isShareBased: editIsShareBased,
-        useApyForYield: editUseApyForYield,
+        useApyForYield: editUseApyForYield || (isManual && !!editEntryDate),
         categoryId: editCategoryId,
+        entryDate: editEntryDate || undefined,
+        firstAcquiredAt,
+        initialAmountUsd,
       });
       if (onRefreshPositions) {
         await onRefreshPositions();
@@ -1182,7 +1222,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                           <span className="text-white font-medium">{pool.symbol}</span>
                           <span className="text-slate-400 text-sm">{pool.project} · {pool.chain}</span>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div>
                             <label className="text-xs text-slate-400">Amount (USD)</label>
                             {position.source === 'wallet' ? (
@@ -1199,6 +1239,18 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                               />
                             )}
                           </div>
+                          {/* Entry Date - only for manual positions */}
+                          {position.source !== 'wallet' && (
+                            <div>
+                              <label className="text-xs text-slate-400">Start Date</label>
+                              <input
+                                type="date"
+                                value={editEntryDate}
+                                onChange={(e) => setEditEntryDate(e.target.value)}
+                                className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+                              />
+                            </div>
+                          )}
                           <div>
                             <label className="text-xs text-slate-400">Fixed APY %</label>
                             <input

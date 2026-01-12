@@ -38,8 +38,18 @@ function addLocalPosition(params: {
   tokenBalance?: number;
   tokenSymbol?: string | null;
   categoryId?: string;
+  initialAmountUsd?: number;
+  firstAcquiredAt?: number;
+  useApyForYield?: boolean;
 }): HeldPosition {
   const positions = getLocalPositions();
+
+  // For manual positions with entry date, calculate firstAcquiredAt and set up APY-based yield
+  const isManual = params.source !== 'wallet';
+  const entryTimestamp = params.entryDate
+    ? new Date(params.entryDate).getTime()
+    : undefined;
+
   const newPosition: HeldPosition = {
     poolId: params.poolId,
     amountUsd: params.amountUsd,
@@ -53,6 +63,10 @@ function addLocalPosition(params: {
     tokenBalance: params.tokenBalance,
     tokenSymbol: params.tokenSymbol || undefined,
     categoryId: params.categoryId,
+    // For manual positions with entry date: store initial amount and enable APY-based yield
+    initialAmountUsd: params.initialAmountUsd ?? (isManual && params.entryDate ? params.amountUsd : undefined),
+    firstAcquiredAt: params.firstAcquiredAt ?? (isManual ? entryTimestamp : undefined),
+    useApyForYield: params.useApyForYield ?? (isManual && params.entryDate ? true : undefined),
   };
   positions.unshift(newPosition);
   saveLocalPositions(positions);
@@ -156,6 +170,9 @@ export async function addPositionToDb(params: {
   tokenBalance?: number;
   tokenSymbol?: string | null;
   categoryId?: string;
+  initialAmountUsd?: number;
+  firstAcquiredAt?: number;
+  useApyForYield?: boolean;
 }): Promise<HeldPosition | null> {
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -163,6 +180,16 @@ export async function addPositionToDb(params: {
   if (!user) {
     return addLocalPosition(params);
   }
+
+  // For manual positions with entry date, set up APY-based yield tracking
+  const isManual = params.source !== 'wallet';
+  const entryTimestamp = params.entryDate
+    ? new Date(params.entryDate).getTime()
+    : undefined;
+
+  const firstAcquiredAt = params.firstAcquiredAt ?? (isManual ? entryTimestamp : undefined);
+  const initialAmountUsd = params.initialAmountUsd ?? (isManual && params.entryDate ? params.amountUsd : undefined);
+  const useApyForYield = params.useApyForYield ?? (isManual && params.entryDate ? true : undefined);
 
   const { data, error } = await supabase
     .from('positions')
@@ -179,6 +206,9 @@ export async function addPositionToDb(params: {
       token_balance: params.tokenBalance ?? null,
       token_symbol: params.tokenSymbol || null,
       category_id: params.categoryId || null,
+      initial_amount_usd: initialAmountUsd ?? null,
+      first_acquired_at: firstAcquiredAt ? new Date(firstAcquiredAt).toISOString() : null,
+      use_apy_for_yield: useApyForYield ?? null,
     })
     .select()
     .single();
@@ -201,6 +231,9 @@ export async function addPositionToDb(params: {
     tokenBalance: data.token_balance ? Number(data.token_balance) : undefined,
     tokenSymbol: data.token_symbol || undefined,
     categoryId: data.category_id || undefined,
+    initialAmountUsd: data.initial_amount_usd ? Number(data.initial_amount_usd) : undefined,
+    firstAcquiredAt: data.first_acquired_at ? new Date(data.first_acquired_at).getTime() : undefined,
+    useApyForYield: data.use_apy_for_yield ?? undefined,
   };
 }
 
