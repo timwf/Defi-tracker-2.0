@@ -5,6 +5,7 @@ import type { Pool, PoolsResponse, SavedView, HeldPosition } from './types/pool'
 import type { FetchProgress } from './utils/historicalData';
 import { fetchPoolHistoryWithCache, isCacheValid } from './utils/historicalData';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { PriceProvider } from './contexts/PriceContext';
 import { NavHeader } from './components/NavHeader';
 import { AddPositionModal } from './components/AddPositionModal';
 import { PoolsPage } from './pages/Pools';
@@ -366,10 +367,12 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/*" element={<AppContent />} />
-        </Routes>
+        <PriceProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/*" element={<AppContent />} />
+          </Routes>
+        </PriceProvider>
       </AuthProvider>
       <Analytics />
     </BrowserRouter>

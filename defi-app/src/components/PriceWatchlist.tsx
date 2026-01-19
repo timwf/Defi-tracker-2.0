@@ -1,57 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  getWatchlist,
-  addToWatchlist,
-  removeFromWatchlist,
-  fetchPrices,
-  searchCoins,
-  type CoinPrice,
-  type WatchlistCoin,
-} from '../utils/priceWatchlist';
+import { useState, useEffect } from 'react';
+import { usePrices } from '../contexts/PriceContext';
+import type { WatchlistCoin } from '../utils/priceWatchlist';
 
 export function PriceWatchlist() {
-  const [watchlist, setWatchlist] = useState<WatchlistCoin[]>([]);
-  const [prices, setPrices] = useState<CoinPrice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    watchlist,
+    prices,
+    loading,
+    error,
+    refreshPrices,
+    addCoin,
+    removeCoin,
+    searchForCoins,
+  } = usePrices();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<WatchlistCoin[]>([]);
   const [searching, setSearching] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-
-  // Load watchlist on mount
-  useEffect(() => {
-    setWatchlist(getWatchlist());
-  }, []);
-
-  // Fetch prices when watchlist changes
-  const loadPrices = useCallback(async () => {
-    if (watchlist.length === 0) {
-      setPrices([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const coinIds = watchlist.map(c => c.id);
-      const data = await fetchPrices(coinIds);
-      setPrices(data);
-    } catch (err) {
-      setError('Failed to load prices');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [watchlist]);
-
-  useEffect(() => {
-    loadPrices();
-    // Refresh prices every 30 seconds
-    const interval = setInterval(loadPrices, 30000);
-    return () => clearInterval(interval);
-  }, [loadPrices]);
 
   // Search for coins
   useEffect(() => {
@@ -63,12 +29,8 @@ export function PriceWatchlist() {
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const results = await searchCoins(searchQuery);
-        // Filter out coins already in watchlist
-        const filtered = results.filter(
-          r => !watchlist.find(w => w.id === r.id)
-        );
-        setSearchResults(filtered);
+        const results = await searchForCoins(searchQuery);
+        setSearchResults(results);
       } catch (err) {
         console.error('Search failed:', err);
       } finally {
@@ -77,19 +39,17 @@ export function PriceWatchlist() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, watchlist]);
+  }, [searchQuery, searchForCoins]);
 
   const handleAddCoin = (coin: WatchlistCoin) => {
-    const updated = addToWatchlist(coin);
-    setWatchlist(updated);
+    addCoin(coin);
     setSearchQuery('');
     setSearchResults([]);
     setShowSearch(false);
   };
 
   const handleRemoveCoin = (coinId: string) => {
-    const updated = removeFromWatchlist(coinId);
-    setWatchlist(updated);
+    removeCoin(coinId);
   };
 
   const formatPrice = (price: number) => {
@@ -119,7 +79,7 @@ export function PriceWatchlist() {
             </button>
           )}
           <button
-            onClick={loadPrices}
+            onClick={refreshPrices}
             disabled={loading}
             className="text-xs px-2 py-1 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 disabled:opacity-50"
           >

@@ -8,6 +8,7 @@ import { downloadPortfolioJson } from '../utils/exportPortfolio';
 import { formatTvl } from '../utils/filterPools';
 import { fetchAllUtilization } from '../utils/protocolUtilization';
 import { fetchCategories, type Category } from '../utils/categories';
+import { usePrices } from '../contexts/PriceContext';
 import { MetricInfo } from '../components/MetricInfo';
 import { PoolSearchInput } from '../components/PoolSearchInput';
 import { PoolInfoCard } from '../components/PoolInfoCard';
@@ -39,11 +40,18 @@ interface PositionAlert {
 }
 
 export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioProps) {
+  const { watchlist, getPrice } = usePrices();
+
   const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
   const [newAmount, setNewAmount] = useState('');
   const [newEntryDate, setNewEntryDate] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [error, setError] = useState('');
+
+  // Token-based entry mode
+  const [valueMode, setValueMode] = useState<'usd' | 'token'>('usd');
+  const [newTokenAmount, setNewTokenAmount] = useState('');
+  const [selectedCoinId, setSelectedCoinId] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState('');
   const [editNotes, setEditNotes] = useState('');
@@ -51,6 +59,9 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   const [editIsShareBased, setEditIsShareBased] = useState(false);
   const [editUseApyForYield, setEditUseApyForYield] = useState(false);
   const [editEntryDate, setEditEntryDate] = useState('');
+  const [editTokenAmount, setEditTokenAmount] = useState('');
+  const [editCoinId, setEditCoinId] = useState<string>('');
+  const [editValueMode, setEditValueMode] = useState<'usd' | 'token'>('usd');
   const [saving, setSaving] = useState(false);
   const [fetchingPoolId, setFetchingPoolId] = useState<string | null>(null);
   const [refreshingPoolId, setRefreshingPoolId] = useState<string | null>(null);
@@ -161,6 +172,17 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       .filter((x): x is PositionWithPool => x !== null);
   }, [positions, pools]);
 
+  // Helper to get dynamic USD value for a position (uses live price for token-based positions)
+  const getPositionUsdValue = (position: HeldPosition): number => {
+    if (position.watchlistCoinId && position.tokenBalance) {
+      const price = getPrice(position.watchlistCoinId);
+      if (price) {
+        return position.tokenBalance * price;
+      }
+    }
+    return position.amountUsd;
+  };
+
   // Filtered and sorted positions for display
   const sortedPositions = useMemo(() => {
     // First filter by category
@@ -177,8 +199,8 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
       switch (portfolioSortField) {
         case 'amount':
-          aVal = a.position.amountUsd;
-          bVal = b.position.amountUsd;
+          aVal = getPositionUsdValue(a.position);
+          bVal = getPositionUsdValue(b.position);
           break;
         case 'apy':
           aVal = a.position.fixedApy ?? a.pool.apy;
@@ -201,8 +223,8 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
           bVal = b.pool.project;
           break;
         default:
-          aVal = a.position.amountUsd;
-          bVal = b.position.amountUsd;
+          aVal = getPositionUsdValue(a.position);
+          bVal = getPositionUsdValue(b.position);
       }
 
       if (typeof aVal === 'string' && typeof bVal === 'string') {
@@ -217,7 +239,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
       return 0;
     });
-  }, [positionsWithPools, portfolioSortField, portfolioSortDirection, filterCategoryId]);
+  }, [positionsWithPools, portfolioSortField, portfolioSortDirection, filterCategoryId, getPrice]);
 
   const handlePortfolioSort = (field: PortfolioSortField) => {
     if (field === portfolioSortField) {
@@ -230,8 +252,8 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
   // Portfolio calculations - only include positions with matching pools
   const totalValue = useMemo(() =>
-    positionsWithPools.reduce((sum, { position }) => sum + position.amountUsd, 0),
-    [positionsWithPools]
+    positionsWithPools.reduce((sum, { position }) => sum + getPositionUsdValue(position), 0),
+    [positionsWithPools, getPrice]
   );
 
   const weightedApy = useMemo(() => {
@@ -239,9 +261,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     return positionsWithPools.reduce((sum, { position, pool }) => {
       // Use fixedApy if set, otherwise use pool's current APY
       const effectiveApy = position.fixedApy ?? pool.apy;
-      return sum + (effectiveApy * position.amountUsd / totalValue);
+      const posUsdValue = getPositionUsdValue(position);
+      return sum + (effectiveApy * posUsdValue / totalValue);
     }, 0);
-  }, [positionsWithPools, totalValue]);
+  }, [positionsWithPools, totalValue, getPrice]);
 
   // Calculate yesterday's weighted APY for comparison
   const yesterdayWeightedApy = useMemo(() => {
@@ -250,12 +273,13 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     const weighted = positionsWithPools.reduce((sum, { position, yesterdayApy }) => {
       if (yesterdayApy !== null) {
         hasYesterdayData = true;
-        return sum + (yesterdayApy * position.amountUsd / totalValue);
+        const posUsdValue = getPositionUsdValue(position);
+        return sum + (yesterdayApy * posUsdValue / totalValue);
       }
       return sum;
     }, 0);
     return hasYesterdayData ? weighted : null;
-  }, [positionsWithPools, totalValue]);
+  }, [positionsWithPools, totalValue, getPrice]);
 
   const weightedApyChange = yesterdayWeightedApy !== null ? weightedApy - yesterdayWeightedApy : null;
 
@@ -627,9 +651,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     if (totalValue === 0) return 0;
     return positionsWithPools.reduce((sum, { position, pool }) => {
       const baseApy = pool.apyBase || 0;
-      return sum + (baseApy * position.amountUsd / totalValue);
+      const posUsdValue = getPositionUsdValue(position);
+      return sum + (baseApy * posUsdValue / totalValue);
     }, 0);
-  }, [positionsWithPools, totalValue]);
+  }, [positionsWithPools, totalValue, getPrice]);
 
   // Risk breakdown
   const riskBreakdown = useMemo(() => {
@@ -639,16 +664,17 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     let organicYieldValue = 0;
 
     positionsWithPools.forEach(({ position, pool }) => {
-      byChain[pool.chain] = (byChain[pool.chain] || 0) + position.amountUsd;
+      const posUsdValue = getPositionUsdValue(position);
+      byChain[pool.chain] = (byChain[pool.chain] || 0) + posUsdValue;
       if (pool.stablecoin) {
-        stablecoinValue += position.amountUsd;
+        stablecoinValue += posUsdValue;
       } else {
-        volatileValue += position.amountUsd;
+        volatileValue += posUsdValue;
       }
       // Organic = base APY vs reward APY
       const baseApy = pool.apyBase || 0;
       const totalApy = pool.apy || 1;
-      organicYieldValue += position.amountUsd * (baseApy / totalApy);
+      organicYieldValue += posUsdValue * (baseApy / totalApy);
     });
 
     return {
@@ -657,30 +683,67 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       volatileValue,
       organicYieldPct: totalValue > 0 ? (organicYieldValue / totalValue) * 100 : 0,
     };
-  }, [positionsWithPools, totalValue]);
+  }, [positionsWithPools, totalValue, getPrice]);
 
   const handleAdd = async () => {
-    const amount = parseFloat(newAmount);
-
     if (!selectedPool) {
       setError('Please select a pool');
       return;
     }
-    if (isNaN(amount) || amount <= 0) {
-      setError('Amount must be a positive number');
-      return;
+
+    // Validate based on mode
+    if (valueMode === 'usd') {
+      const amount = parseFloat(newAmount);
+      if (isNaN(amount) || amount <= 0) {
+        setError('Amount must be a positive number');
+        return;
+      }
+    } else {
+      const tokenAmount = parseFloat(newTokenAmount);
+      if (isNaN(tokenAmount) || tokenAmount <= 0) {
+        setError('Token amount must be a positive number');
+        return;
+      }
+      if (!selectedCoinId) {
+        setError('Please select a token from the watchlist');
+        return;
+      }
+      const price = getPrice(selectedCoinId);
+      if (!price) {
+        setError('Could not get price for selected token');
+        return;
+      }
     }
 
     setSaving(true);
     try {
       const poolIdToFetch = selectedPool.pool;
 
-      await addPositionToDb({
-        poolId: selectedPool.pool,
-        amountUsd: amount,
-        entryDate: newEntryDate || undefined,
-        notes: newNotes || undefined,
-      });
+      if (valueMode === 'usd') {
+        // Standard USD-based position
+        const amount = parseFloat(newAmount);
+        await addPositionToDb({
+          poolId: selectedPool.pool,
+          amountUsd: amount,
+          entryDate: newEntryDate || undefined,
+          notes: newNotes || undefined,
+        });
+      } else {
+        // Token-based position - calculate initial USD value from current price
+        const tokenAmount = parseFloat(newTokenAmount);
+        const price = getPrice(selectedCoinId)!;
+        const initialUsdValue = tokenAmount * price;
+
+        await addPositionToDb({
+          poolId: selectedPool.pool,
+          amountUsd: initialUsdValue,
+          tokenBalance: tokenAmount,
+          tokenSymbol: watchlist.find(c => c.id === selectedCoinId)?.symbol,
+          watchlistCoinId: selectedCoinId,
+          entryDate: newEntryDate || undefined,
+          notes: newNotes || undefined,
+        });
+      }
 
       if (onRefreshPositions) {
         await onRefreshPositions();
@@ -702,6 +765,9 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       setNewAmount('');
       setNewEntryDate('');
       setNewNotes('');
+      setValueMode('usd');
+      setNewTokenAmount('');
+      setSelectedCoinId('');
       setError('');
     } catch (err) {
       setError('Failed to add position');
@@ -734,19 +800,53 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     const entryDateStr = position.entryDate ||
       (position.firstAcquiredAt ? new Date(position.firstAcquiredAt).toISOString().split('T')[0] : '');
     setEditEntryDate(entryDateStr);
+    // Token-based mode
+    if (position.watchlistCoinId && position.tokenBalance) {
+      setEditValueMode('token');
+      setEditTokenAmount(position.tokenBalance.toString());
+      setEditCoinId(position.watchlistCoinId);
+    } else {
+      setEditValueMode('usd');
+      setEditTokenAmount('');
+      setEditCoinId('');
+    }
   };
 
   const handleSaveEdit = async () => {
     if (!editingId) return;
-    const amount = parseFloat(editAmount);
-    if (isNaN(amount) || amount <= 0) return;
-
-    // If empty string, explicitly set to undefined to clear the fixed APY
-    const fixedApyValue = editFixedApy.trim() === '' ? null : parseFloat(editFixedApy);
 
     // Get current position to check if this is manual and if we need to set initial amount
     const currentPosition = positions.find(p => p.poolId === editingId);
     const isManual = currentPosition?.source !== 'wallet';
+
+    // Validate based on mode
+    let finalAmountUsd: number;
+    let tokenBalance: number | undefined;
+    let watchlistCoinId: string | undefined;
+    let tokenSymbol: string | undefined;
+
+    if (editValueMode === 'token') {
+      const tokenAmount = parseFloat(editTokenAmount);
+      if (isNaN(tokenAmount) || tokenAmount <= 0) return;
+      if (!editCoinId) return;
+      const price = getPrice(editCoinId);
+      if (!price) return;
+
+      finalAmountUsd = tokenAmount * price;
+      tokenBalance = tokenAmount;
+      watchlistCoinId = editCoinId;
+      tokenSymbol = watchlist.find(c => c.id === editCoinId)?.symbol;
+    } else {
+      const amount = parseFloat(editAmount);
+      if (isNaN(amount) || amount <= 0) return;
+      finalAmountUsd = amount;
+      // Clear token fields if switching back to USD mode
+      tokenBalance = undefined;
+      watchlistCoinId = undefined;
+    }
+
+    // If empty string, explicitly set to undefined to clear the fixed APY
+    const fixedApyValue = editFixedApy.trim() === '' ? null : parseFloat(editFixedApy);
 
     // Calculate firstAcquiredAt from entry date for manual positions
     const firstAcquiredAt = editEntryDate
@@ -755,13 +855,13 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
     // For manual positions: if entry date is set and no initial amount exists, use current amount
     const initialAmountUsd = isManual && editEntryDate && !currentPosition?.initialAmountUsd
-      ? amount
+      ? finalAmountUsd
       : undefined;
 
     setSaving(true);
     try {
-      await updatePositionInDb(editingId, {
-        amountUsd: amount,
+      const updates: Parameters<typeof updatePositionInDb>[1] = {
+        amountUsd: finalAmountUsd,
         notes: editNotes || undefined,
         fixedApy: fixedApyValue === null ? undefined : (isNaN(fixedApyValue) ? undefined : fixedApyValue),
         isShareBased: editIsShareBased,
@@ -770,12 +870,24 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         entryDate: editEntryDate || undefined,
         firstAcquiredAt,
         initialAmountUsd,
-      });
+      };
+
+      // Add token fields if in token mode
+      if (editValueMode === 'token') {
+        updates.tokenBalance = tokenBalance;
+        updates.tokenSymbol = tokenSymbol;
+        updates.watchlistCoinId = watchlistCoinId;
+      }
+
+      await updatePositionInDb(editingId, updates);
       if (onRefreshPositions) {
         await onRefreshPositions();
       }
       setEditingId(null);
       setEditCategoryId(undefined);
+      setEditValueMode('usd');
+      setEditTokenAmount('');
+      setEditCoinId('');
     } finally {
       setSaving(false);
     }
@@ -1154,7 +1266,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                           </div>
                         </td>
                         <td className="text-right py-2 px-3 text-slate-300">
-                          {formatCurrency(position.amountUsd)}
+                          {formatCurrency(getPositionUsdValue(position))}
                         </td>
                         <td className="text-right py-2 px-3">
                           {position.fixedApy !== undefined ? (
@@ -1222,23 +1334,89 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                           <span className="text-white font-medium">{pool.symbol}</span>
                           <span className="text-slate-400 text-sm">{pool.project} · {pool.chain}</span>
                         </div>
+                        {/* USD / Token Mode Toggle - only for manual positions */}
+                        {position.source !== 'wallet' && (
+                          <div className="flex gap-2 mb-3">
+                            <button
+                              type="button"
+                              onClick={() => setEditValueMode('usd')}
+                              className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                                editValueMode === 'usd'
+                                  ? 'bg-yellow-600 text-white'
+                                  : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                              }`}
+                            >
+                              USD Value
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditValueMode('token')}
+                              className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                                editValueMode === 'token'
+                                  ? 'bg-cyan-600 text-white'
+                                  : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                              }`}
+                            >
+                              Token Amount
+                            </button>
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                          <div>
-                            <label className="text-xs text-slate-400">Amount (USD)</label>
-                            {position.source === 'wallet' ? (
+                          {position.source === 'wallet' ? (
+                            <div>
+                              <label className="text-xs text-slate-400">Amount (USD)</label>
                               <div className="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-400 text-sm">
                                 ${parseFloat(editAmount).toLocaleString()}
                                 <span className="text-xs text-slate-500 ml-1">(from wallet)</span>
                               </div>
-                            ) : (
+                            </div>
+                          ) : editValueMode === 'usd' ? (
+                            <div>
+                              <label className="text-xs text-slate-400">Amount (USD)</label>
                               <input
                                 type="number"
                                 value={editAmount}
                                 onChange={(e) => setEditAmount(e.target.value)}
                                 className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm"
                               />
-                            )}
-                          </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div>
+                                <label className="text-xs text-slate-400">Token</label>
+                                <select
+                                  value={editCoinId}
+                                  onChange={(e) => setEditCoinId(e.target.value)}
+                                  className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+                                >
+                                  <option value="">Select from watchlist...</option>
+                                  {watchlist.map(coin => {
+                                    const price = getPrice(coin.id);
+                                    return (
+                                      <option key={coin.id} value={coin.id}>
+                                        {coin.symbol} {price ? `($${price.toLocaleString()})` : ''}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-xs text-slate-400">Token Amount</label>
+                                <input
+                                  type="number"
+                                  value={editTokenAmount}
+                                  onChange={(e) => setEditTokenAmount(e.target.value)}
+                                  className="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+                                />
+                                {editCoinId && editTokenAmount && (
+                                  <p className="text-xs text-cyan-400 mt-1">
+                                    ≈ ${((parseFloat(editTokenAmount) || 0) * (getPrice(editCoinId) || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </p>
+                                )}
+                              </div>
+                            </>
+                          )}
                           {/* Entry Date - only for manual positions */}
                           {position.source !== 'wallet' && (
                             <div>
@@ -1388,38 +1566,107 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
 
               {/* Amount and other fields - show when pool is selected */}
               {selectedPool && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                  <div>
-                    <label className="block text-xs sm:text-sm text-slate-400 mb-1">Amount (USD) *</label>
-                    <input
-                      type="number"
-                      value={newAmount}
-                      onChange={(e) => setNewAmount(e.target.value)}
-                      placeholder="1000"
-                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
-                      autoFocus
-                    />
+                <>
+                  {/* USD / Token Mode Toggle */}
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setValueMode('usd')}
+                      className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                        valueMode === 'usd'
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                      }`}
+                    >
+                      USD Value
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setValueMode('token')}
+                      className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                        valueMode === 'token'
+                          ? 'bg-cyan-600 text-white'
+                          : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                      }`}
+                    >
+                      Token Amount
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-xs sm:text-sm text-slate-400 mb-1">Entry Date</label>
-                    <input
-                      type="date"
-                      value={newEntryDate}
-                      onChange={(e) => setNewEntryDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
-                    />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                    {valueMode === 'usd' ? (
+                      <div>
+                        <label className="block text-xs sm:text-sm text-slate-400 mb-1">Amount (USD) *</label>
+                        <input
+                          type="number"
+                          value={newAmount}
+                          onChange={(e) => setNewAmount(e.target.value)}
+                          placeholder="1000"
+                          className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                          autoFocus
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-xs sm:text-sm text-slate-400 mb-1">Token *</label>
+                          <select
+                            value={selectedCoinId}
+                            onChange={(e) => setSelectedCoinId(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                          >
+                            <option value="">Select from watchlist...</option>
+                            {watchlist.map(coin => {
+                              const price = getPrice(coin.id);
+                              return (
+                                <option key={coin.id} value={coin.id}>
+                                  {coin.symbol} {price ? `($${price.toLocaleString()})` : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          {watchlist.length === 0 && (
+                            <p className="text-xs text-amber-400 mt-1">Add tokens to your watchlist first</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-xs sm:text-sm text-slate-400 mb-1">Token Amount *</label>
+                          <input
+                            type="number"
+                            value={newTokenAmount}
+                            onChange={(e) => setNewTokenAmount(e.target.value)}
+                            placeholder="10.5"
+                            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                          />
+                          {selectedCoinId && newTokenAmount && (
+                            <p className="text-xs text-cyan-400 mt-1">
+                              ≈ ${((parseFloat(newTokenAmount) || 0) * (getPrice(selectedCoinId) || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    )}
+                    <div>
+                      <label className="block text-xs sm:text-sm text-slate-400 mb-1">Entry Date</label>
+                      <input
+                        type="date"
+                        value={newEntryDate}
+                        onChange={(e) => setNewEntryDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs sm:text-sm text-slate-400 mb-1">Notes</label>
+                      <input
+                        type="text"
+                        value={newNotes}
+                        onChange={(e) => setNewNotes(e.target.value)}
+                        placeholder="Add notes..."
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs sm:text-sm text-slate-400 mb-1">Notes</label>
-                    <input
-                      type="text"
-                      value={newNotes}
-                      onChange={(e) => setNewNotes(e.target.value)}
-                      placeholder="Add notes..."
-                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
-                    />
-                  </div>
-                </div>
+                </>
               )}
             </div>
             {error && (
@@ -1450,7 +1697,8 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
             ) : (
               <div className="space-y-2">
                 {positionsWithPools.map(({ position, pool }) => {
-                  const allocation = totalValue > 0 ? (position.amountUsd / totalValue) * 100 : 0;
+                  const posUsdValue = getPositionUsdValue(position);
+                  const allocation = totalValue > 0 ? (posUsdValue / totalValue) * 100 : 0;
                   return (
                     <div key={position.poolId}>
                       <div className="flex justify-between text-sm mb-1">

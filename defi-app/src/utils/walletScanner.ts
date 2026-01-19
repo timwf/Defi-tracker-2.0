@@ -1,4 +1,6 @@
 import type { ScannedToken, TokenTransaction } from '../types/pool';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { DriftClient, User, initialize, SpotBalanceType } from '@drift-labs/sdk';
 
 // Chain configurations for Alchemy API
 const CHAIN_CONFIG: Record<string, { alchemyNetwork: string; nativeSymbol: string; nativeName: string; coingeckoId: string }> = {
@@ -9,7 +11,8 @@ const CHAIN_CONFIG: Record<string, { alchemyNetwork: string; nativeSymbol: strin
   Base: { alchemyNetwork: 'base-mainnet', nativeSymbol: 'ETH', nativeName: 'Ethereum', coingeckoId: 'ethereum' },
 };
 
-export const SUPPORTED_CHAINS = Object.keys(CHAIN_CONFIG);
+// EVM chains from CHAIN_CONFIG + Solana
+export const SUPPORTED_CHAINS = [...Object.keys(CHAIN_CONFIG), 'Solana'];
 
 interface AlchemyTokenBalance {
   contractAddress: string;
@@ -34,7 +37,341 @@ const DEFILLAMA_CHAINS: Record<string, string> = {
   'Polygon': 'polygon',
   'Optimism': 'optimism',
   'Base': 'base',
+  'Solana': 'solana',
 };
+
+// Solana configuration
+const SOLANA_CONFIG = {
+  network: 'solana-mainnet',
+  nativeSymbol: 'SOL',
+  nativeName: 'Solana',
+  decimals: 9,
+  coingeckoId: 'solana',
+};
+
+// SPL Token Program ID (standard for all SPL tokens)
+const SPL_TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+
+function getSolanaRpcUrl(): string {
+  const apiKey = import.meta.env.VITE_ALCHEMY_API_KEY;
+  if (!apiKey) throw new Error('VITE_ALCHEMY_API_KEY not configured');
+  return `https://solana-mainnet.g.alchemy.com/v2/${apiKey}`;
+}
+
+async function getSolanaBalance(walletAddress: string): Promise<number> {
+  const url = getSolanaRpcUrl();
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'getBalance',
+      params: [walletAddress],
+      id: 1,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Solana balance: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(`Solana RPC error: ${data.error.message}`);
+  }
+
+  // Balance is in lamports (1 SOL = 1e9 lamports)
+  const lamports = data.result?.value ?? 0;
+  return lamports / 1e9;
+}
+
+interface SolanaTokenAccount {
+  mint: string;
+  amount: string;
+  decimals: number;
+}
+
+async function getSolanaTokenAccounts(walletAddress: string): Promise<SolanaTokenAccount[]> {
+  const url = getSolanaRpcUrl();
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'getTokenAccountsByOwner',
+      params: [
+        walletAddress,
+        { programId: SPL_TOKEN_PROGRAM_ID },
+        { encoding: 'jsonParsed' },
+      ],
+      id: 1,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Solana token accounts: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(`Solana RPC error: ${data.error.message}`);
+  }
+
+  const accounts: SolanaTokenAccount[] = [];
+  const tokenAccounts = data.result?.value || [];
+
+  for (const account of tokenAccounts) {
+    const parsed = account.account?.data?.parsed?.info;
+    if (!parsed) continue;
+
+    const amount = parsed.tokenAmount?.amount;
+    const decimals = parsed.tokenAmount?.decimals;
+    const mint = parsed.mint;
+
+    // Skip zero balances
+    if (!amount || amount === '0') continue;
+
+    accounts.push({
+      mint,
+      amount,
+      decimals: decimals ?? 0,
+    });
+  }
+
+  return accounts;
+}
+
+// Fetch native SOL price
+async function fetchSolPrice(): Promise<number | null> {
+  const cacheKey = 'native:Solana';
+  const cached = priceCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.price;
+  }
+
+  try {
+    const response = await fetch(
+      'https://coins.llama.fi/prices/current/coingecko:solana',
+      { headers: { 'Accept': 'application/json' } }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      const price = data.coins?.['coingecko:solana']?.price;
+      if (typeof price === 'number') {
+        priceCache.set(cacheKey, { price, timestamp: Date.now() });
+        return price;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to fetch SOL price:', err);
+  }
+
+  return null;
+}
+
+// Scan Solana wallet for tokens
+// Drift spot market configurations (market index -> token info)
+const DRIFT_SPOT_MARKETS: Record<number, { symbol: string; name: string; mint: string; decimals: number }> = {
+  0: { symbol: 'USDC', name: 'USD Coin', mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 },
+  1: { symbol: 'SOL', name: 'Solana', mint: 'So11111111111111111111111111111111111111112', decimals: 9 },
+  2: { symbol: 'mSOL', name: 'Marinade Staked SOL', mint: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So', decimals: 9 },
+  3: { symbol: 'wBTC', name: 'Wrapped Bitcoin', mint: '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh', decimals: 8 },
+  4: { symbol: 'wETH', name: 'Wrapped Ether', mint: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs', decimals: 8 },
+  5: { symbol: 'USDT', name: 'Tether USD', mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6 },
+  6: { symbol: 'jitoSOL', name: 'Jito Staked SOL', mint: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn', decimals: 9 },
+  7: { symbol: 'PYTH', name: 'Pyth Network', mint: 'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3', decimals: 6 },
+  8: { symbol: 'bSOL', name: 'BlazeStake Staked SOL', mint: 'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1', decimals: 9 },
+  9: { symbol: 'JTO', name: 'Jito', mint: 'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL', decimals: 9 },
+  10: { symbol: 'WIF', name: 'dogwifhat', mint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', decimals: 6 },
+  15: { symbol: 'dSOL', name: 'Drift Staked SOL', mint: 'Dso1bDeDjCQxTrWHqUUi63oBvV7Mdm6WaobLbQ7gnPQ', decimals: 9 },
+};
+
+interface DriftPosition {
+  marketIndex: number;
+  symbol: string;
+  name: string;
+  mint: string;
+  balance: number;
+  decimals: number;
+  isDeposit: boolean;
+}
+
+// Fetch Drift protocol positions for a wallet (currently disabled - see scanWallet comment)
+// Exported to avoid unused warning - can be used for manual testing
+export async function fetchDriftPositions(walletAddress: string): Promise<DriftPosition[]> {
+  const positions: DriftPosition[] = [];
+
+  try {
+    // Use public Solana RPC for Drift SDK (handles burst requests better than Alchemy free tier)
+    const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+    const walletPubkey = new PublicKey(walletAddress);
+
+    // Initialize Drift SDK
+    initialize({ env: 'mainnet-beta' });
+
+    // Create a read-only Drift client
+    const driftClient = new DriftClient({
+      connection,
+      wallet: {
+        publicKey: walletPubkey,
+        signTransaction: async () => { throw new Error('Read-only'); },
+        signAllTransactions: async () => { throw new Error('Read-only'); },
+      },
+      env: 'mainnet-beta',
+      userStats: false,
+      activeSubAccountId: 0,
+      authority: walletPubkey,
+    });
+
+    await driftClient.subscribe();
+
+    // Get user account (subaccount 0 is default)
+    const userAccountPublicKey = await driftClient.getUserAccountPublicKey(0);
+    const userAccountExists = await connection.getAccountInfo(userAccountPublicKey);
+
+    if (!userAccountExists) {
+      await driftClient.unsubscribe();
+      return positions;
+    }
+
+    const user = new User({
+      driftClient,
+      userAccountPublicKey,
+    });
+
+    await user.subscribe();
+
+    // Get spot positions
+    const spotPositions = user.getUserAccount().spotPositions;
+
+    for (const position of spotPositions) {
+      const marketIndex = position.marketIndex;
+      const marketInfo = DRIFT_SPOT_MARKETS[marketIndex];
+
+      if (!marketInfo) continue;
+
+      // Get token amount (scaled balance)
+      const scaledBalance = position.scaledBalance.toNumber();
+      if (scaledBalance === 0) continue;
+
+      const isDeposit = position.balanceType === SpotBalanceType.DEPOSIT;
+
+      // Get the spot market to calculate actual token balance
+      const spotMarket = driftClient.getSpotMarketAccount(marketIndex);
+      if (!spotMarket) continue;
+
+      // Calculate actual token balance from scaled balance
+      let tokenBalance: number;
+      if (isDeposit) {
+        const cumulativeDepositInterest = spotMarket.cumulativeDepositInterest.toNumber() / 1e10;
+        tokenBalance = (scaledBalance * cumulativeDepositInterest) / Math.pow(10, marketInfo.decimals);
+      } else {
+        const cumulativeBorrowInterest = spotMarket.cumulativeBorrowInterest.toNumber() / 1e10;
+        tokenBalance = (scaledBalance * cumulativeBorrowInterest) / Math.pow(10, marketInfo.decimals);
+      }
+
+      if (tokenBalance > 0.000001) {
+        positions.push({
+          marketIndex,
+          symbol: marketInfo.symbol,
+          name: marketInfo.name,
+          mint: marketInfo.mint,
+          balance: tokenBalance,
+          decimals: marketInfo.decimals,
+          isDeposit,
+        });
+      }
+    }
+
+    await user.unsubscribe();
+    await driftClient.unsubscribe();
+  } catch (err) {
+    console.error('Error fetching Drift positions:', err);
+  }
+
+  return positions;
+}
+
+async function scanSolanaWallet(
+  walletAddress: string,
+  onProgress?: (chain: string, status: 'scanning' | 'done' | 'error' | 'fetching_prices') => void
+): Promise<ScannedToken[]> {
+  const tokens: ScannedToken[] = [];
+
+  onProgress?.('Solana', 'scanning');
+
+  try {
+    // Get native SOL balance
+    const solBalance = await getSolanaBalance(walletAddress);
+    if (solBalance > 0) {
+      const solPrice = await fetchSolPrice();
+      tokens.push({
+        chain: 'Solana',
+        tokenAddress: 'So11111111111111111111111111111111111111112', // Wrapped SOL mint (used as identifier)
+        tokenSymbol: SOLANA_CONFIG.nativeSymbol,
+        tokenName: SOLANA_CONFIG.nativeName,
+        balanceRaw: Math.floor(solBalance * 1e9).toString(),
+        balanceFormatted: solBalance,
+        decimals: SOLANA_CONFIG.decimals,
+        usdValue: solPrice ? solBalance * solPrice : null,
+      });
+    }
+
+    // Get SPL token accounts
+    const tokenAccounts = await getSolanaTokenAccounts(walletAddress);
+
+    for (const account of tokenAccounts) {
+      const balanceFormatted = Number(account.amount) / Math.pow(10, account.decimals);
+
+      tokens.push({
+        chain: 'Solana',
+        tokenAddress: account.mint,
+        tokenSymbol: null, // Will try to get from price API
+        tokenName: null,
+        balanceRaw: account.amount,
+        balanceFormatted,
+        decimals: account.decimals,
+        usdValue: null, // Will be filled in with price fetch
+      });
+    }
+
+    // Drift protocol positions - disabled for now
+    // The Drift SDK requires getProgramAccounts which hits rate limits on Alchemy
+    // and is blocked by public Solana RPC. Would need Helius or dedicated RPC.
+    // For now, Drift positions should be tracked manually.
+    //
+    // To re-enable: uncomment below and use Helius RPC in fetchDriftPositions
+    // try {
+    //   const driftPositions = await fetchDriftPositions(walletAddress);
+    //   for (const position of driftPositions) {
+    //     if (position.isDeposit) {
+    //       tokens.push({
+    //         chain: 'Solana',
+    //         tokenAddress: position.mint,
+    //         tokenSymbol: `${position.symbol} (Drift)`,
+    //         tokenName: `${position.name} - Drift Deposit`,
+    //         balanceRaw: Math.floor(position.balance * Math.pow(10, position.decimals)).toString(),
+    //         balanceFormatted: position.balance,
+    //         decimals: position.decimals,
+    //         usdValue: null,
+    //       });
+    //     }
+    //   }
+    // } catch (err) {
+    //   console.warn('Failed to fetch Drift positions:', err);
+    // }
+
+    onProgress?.('Solana', 'done');
+  } catch (err) {
+    console.error('Error scanning Solana wallet:', err);
+    onProgress?.('Solana', 'error');
+  }
+
+  return tokens;
+}
 
 function getAlchemyUrl(chain: string): string {
   const config = CHAIN_CONFIG[chain];
@@ -658,7 +995,51 @@ export async function scanWalletTokens(
 ): Promise<ScannedToken[]> {
   const allTokens: ScannedToken[] = [];
 
-  for (const chain of chains) {
+  // Detect address type
+  const addressInfo = isValidAddress(walletAddress);
+
+  // Handle Solana addresses
+  if (addressInfo.type === 'solana') {
+    if (chains.includes('Solana')) {
+      const solanaTokens = await scanSolanaWallet(walletAddress, onProgress);
+      allTokens.push(...solanaTokens);
+    }
+    // Skip EVM chains for Solana addresses - return early after price fetch
+    // Fetch USD prices for Solana SPL tokens
+    const splTokens = allTokens.filter(t =>
+      t.chain === 'Solana' &&
+      t.tokenAddress !== 'So11111111111111111111111111111111111111112' &&
+      t.usdValue === null
+    );
+    if (splTokens.length > 0) {
+      onProgress?.('prices', 'fetching_prices');
+      const priceMap = await fetchTokenPrices(
+        splTokens.map(t => ({ chain: t.chain, tokenAddress: t.tokenAddress }))
+      );
+      for (const token of splTokens) {
+        const key = `${token.chain}:${token.tokenAddress.toLowerCase()}`;
+        const price = priceMap.get(key);
+        if (price) {
+          token.usdValue = token.balanceFormatted * price;
+          // Also try to get symbol from price data
+        }
+      }
+    }
+    // Sort and return
+    return allTokens.sort((a, b) => {
+      if (a.usdValue !== null && b.usdValue !== null) {
+        return b.usdValue - a.usdValue;
+      }
+      if (a.usdValue !== null) return -1;
+      if (b.usdValue !== null) return 1;
+      return b.balanceFormatted - a.balanceFormatted;
+    });
+  }
+
+  // Handle EVM addresses - filter out Solana from chains
+  const evmChains = chains.filter(c => c !== 'Solana');
+
+  for (const chain of evmChains) {
     if (!CHAIN_CONFIG[chain]) continue;
 
     onProgress?.(chain, 'scanning');
@@ -757,6 +1138,22 @@ export async function scanWalletTokens(
 
 export function isValidEthAddress(address: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(address);
+}
+
+export function isValidSolAddress(address: string): boolean {
+  // Solana addresses are base58 encoded, 32-44 characters
+  // Excludes 0, O, I, l (not in base58 alphabet)
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+}
+
+export function isValidAddress(address: string): { valid: boolean; type: 'evm' | 'solana' | null } {
+  if (isValidEthAddress(address)) {
+    return { valid: true, type: 'evm' };
+  }
+  if (isValidSolAddress(address)) {
+    return { valid: true, type: 'solana' };
+  }
+  return { valid: false, type: null };
 }
 
 // Interface for transfer history

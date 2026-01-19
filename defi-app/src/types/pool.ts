@@ -135,6 +135,8 @@ export interface HeldPosition {
   useApyForYield?: boolean;     // Use APY-based yield calculation instead of deposit tracking (uses fixedApy if set, else pool.apy)
   // Category assignment
   categoryId?: string;          // User-defined category for organization
+  // Token-based manual positions (value derived from watchlist price)
+  watchlistCoinId?: string;     // CoinGecko coin ID for price lookup (e.g., "solana")
 }
 
 // Scanned token from wallet

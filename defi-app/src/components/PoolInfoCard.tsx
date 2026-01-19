@@ -3,6 +3,7 @@ import type { Pool, CalculatedMetrics, HeldPosition } from '../types/pool';
 import { getCachedData, getPoolMetrics } from '../utils/historicalData';
 import { formatTvl, formatApy, formatSigma } from '../utils/filterPools';
 import { fetchUnderlyingTokenPrices, type UnderlyingTokenPrice } from '../utils/walletScanner';
+import { usePrices } from '../contexts/PriceContext';
 import type { Category } from '../utils/categories';
 import { Sparkline } from './Sparkline';
 import { MetricInfo } from './MetricInfo';
@@ -145,9 +146,24 @@ export function PoolInfoCard({
   protocolUtilization,
   category,
 }: PoolInfoCardProps) {
+  const { getPrice } = usePrices();
   const [showTransactionHistory, setShowTransactionHistory] = useState(false);
   const [underlyingPrices, setUnderlyingPrices] = useState<UnderlyingTokenPrice[]>([]);
   const metrics: CalculatedMetrics | null = getPoolMetrics(pool.pool);
+
+  // Helper to get dynamic USD value for token-based positions
+  const getPositionUsdValue = (): number => {
+    if (!position) return 0;
+    if (position.watchlistCoinId && position.tokenBalance) {
+      const price = getPrice(position.watchlistCoinId);
+      if (price) {
+        return position.tokenBalance * price;
+      }
+    }
+    return position.amountUsd;
+  };
+
+  const positionUsdValue = getPositionUsdValue();
   const cachedData = getCachedData(pool.pool);
   const hasHistoricalData = cachedData !== null;
   const dataPoints = cachedData?.data?.length || 0;
@@ -173,9 +189,9 @@ export function PoolInfoCard({
   // Portfolio calculations - use fixedApy if set
   const effectiveApy = position?.fixedApy ?? pool.apy;
   const allocation = position && totalPortfolioValue > 0
-    ? (position.amountUsd / totalPortfolioValue) * 100
+    ? (positionUsdValue / totalPortfolioValue) * 100
     : 0;
-  const annualEarning = position ? position.amountUsd * (effectiveApy / 100) : 0;
+  const annualEarning = position ? positionUsdValue * (effectiveApy / 100) : 0;
   const monthlyEarning = annualEarning / 12;
   const dailyEarning = annualEarning / 365;
 
@@ -675,10 +691,13 @@ export function PoolInfoCard({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <div className="text-slate-400 text-xs">Amount</div>
-              <div className="text-white font-semibold text-lg">{formatCurrency(position.amountUsd)}</div>
+              <div className="text-white font-semibold text-lg">{formatCurrency(positionUsdValue)}</div>
               {position.tokenBalance && position.tokenSymbol && (
                 <div className="text-slate-400 text-xs">
                   {position.tokenBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} {position.tokenSymbol}
+                  {position.watchlistCoinId && (
+                    <span className="text-cyan-400 ml-1">(live)</span>
+                  )}
                 </div>
               )}
               <div className="text-slate-500 text-xs">{allocation.toFixed(1)}% of portfolio</div>

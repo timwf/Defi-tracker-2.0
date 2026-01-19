@@ -41,6 +41,7 @@ function addLocalPosition(params: {
   initialAmountUsd?: number;
   firstAcquiredAt?: number;
   useApyForYield?: boolean;
+  watchlistCoinId?: string;
 }): HeldPosition {
   const positions = getLocalPositions();
 
@@ -63,6 +64,7 @@ function addLocalPosition(params: {
     tokenBalance: params.tokenBalance,
     tokenSymbol: params.tokenSymbol || undefined,
     categoryId: params.categoryId,
+    watchlistCoinId: params.watchlistCoinId,
     // For manual positions with entry date: store initial amount and enable APY-based yield
     initialAmountUsd: params.initialAmountUsd ?? (isManual && params.entryDate ? params.amountUsd : undefined),
     firstAcquiredAt: params.firstAcquiredAt ?? (isManual ? entryTimestamp : undefined),
@@ -155,6 +157,7 @@ export async function fetchPositions(): Promise<HeldPosition[]> {
     actualDepositedUsd: row.actual_deposited_usd ? Number(row.actual_deposited_usd) : undefined,
     useApyForYield: row.use_apy_for_yield ?? undefined,
     categoryId: row.category_id || undefined,
+    watchlistCoinId: row.watchlist_coin_id || undefined,
   }));
 }
 
@@ -173,6 +176,7 @@ export async function addPositionToDb(params: {
   initialAmountUsd?: number;
   firstAcquiredAt?: number;
   useApyForYield?: boolean;
+  watchlistCoinId?: string;
 }): Promise<HeldPosition | null> {
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -209,6 +213,7 @@ export async function addPositionToDb(params: {
       initial_amount_usd: initialAmountUsd ?? null,
       first_acquired_at: firstAcquiredAt ? new Date(firstAcquiredAt).toISOString() : null,
       use_apy_for_yield: useApyForYield ?? null,
+      watchlist_coin_id: params.watchlistCoinId || null,
     })
     .select()
     .single();
@@ -234,6 +239,7 @@ export async function addPositionToDb(params: {
     initialAmountUsd: data.initial_amount_usd ? Number(data.initial_amount_usd) : undefined,
     firstAcquiredAt: data.first_acquired_at ? new Date(data.first_acquired_at).getTime() : undefined,
     useApyForYield: data.use_apy_for_yield ?? undefined,
+    watchlistCoinId: data.watchlist_coin_id || undefined,
   };
 }
 
@@ -300,6 +306,7 @@ export async function updatePositionInDb(
   if (updates.actualDepositedUsd !== undefined) updateData.actual_deposited_usd = updates.actualDepositedUsd;
   if ('useApyForYield' in updates) updateData.use_apy_for_yield = updates.useApyForYield ?? null;
   if ('categoryId' in updates) updateData.category_id = updates.categoryId || null;
+  if ('watchlistCoinId' in updates) updateData.watchlist_coin_id = updates.watchlistCoinId || null;
 
   const { error } = await supabase
     .from('positions')

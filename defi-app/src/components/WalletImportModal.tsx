@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { ScannedToken } from '../types/pool';
-import { scanWalletTokens, isValidEthAddress, SUPPORTED_CHAINS } from '../utils/walletScanner';
+import { scanWalletTokens, isValidAddress, SUPPORTED_CHAINS } from '../utils/walletScanner';
 import { addUnmappedPositions } from '../utils/unmappedPositions';
 
 interface WalletImportModalProps {
@@ -61,8 +61,9 @@ export function WalletImportModal({ isOpen, onClose, onImportComplete }: WalletI
   };
 
   const handleScan = async () => {
-    if (!isValidEthAddress(walletAddress)) {
-      setError('Please enter a valid Ethereum address (0x...)');
+    const addressInfo = isValidAddress(walletAddress);
+    if (!addressInfo.valid) {
+      setError('Please enter a valid wallet address (0x... or Solana)');
       return;
     }
 
@@ -191,7 +192,7 @@ export function WalletImportModal({ isOpen, onClose, onImportComplete }: WalletI
               id="walletAddress"
               value={walletAddress}
               onChange={(e) => setWalletAddress(e.target.value.trim())}
-              placeholder="0x..."
+              placeholder="0x... or Solana address"
               className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 text-base focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
               autoFocus
               disabled={scanStatus === 'scanning'}
