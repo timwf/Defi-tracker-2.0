@@ -174,41 +174,6 @@ async function fetchSolPrice(): Promise<number | null> {
 }
 
 // Scan Solana wallet for tokens
-// Drift spot market configurations (market index -> token info)
-const DRIFT_SPOT_MARKETS: Record<number, { symbol: string; name: string; mint: string; decimals: number }> = {
-  0: { symbol: 'USDC', name: 'USD Coin', mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 },
-  1: { symbol: 'SOL', name: 'Solana', mint: 'So11111111111111111111111111111111111111112', decimals: 9 },
-  2: { symbol: 'mSOL', name: 'Marinade Staked SOL', mint: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So', decimals: 9 },
-  3: { symbol: 'wBTC', name: 'Wrapped Bitcoin', mint: '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh', decimals: 8 },
-  4: { symbol: 'wETH', name: 'Wrapped Ether', mint: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs', decimals: 8 },
-  5: { symbol: 'USDT', name: 'Tether USD', mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6 },
-  6: { symbol: 'jitoSOL', name: 'Jito Staked SOL', mint: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn', decimals: 9 },
-  7: { symbol: 'PYTH', name: 'Pyth Network', mint: 'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3', decimals: 6 },
-  8: { symbol: 'bSOL', name: 'BlazeStake Staked SOL', mint: 'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1', decimals: 9 },
-  9: { symbol: 'JTO', name: 'Jito', mint: 'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL', decimals: 9 },
-  10: { symbol: 'WIF', name: 'dogwifhat', mint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', decimals: 6 },
-  15: { symbol: 'dSOL', name: 'Drift Staked SOL', mint: 'Dso1bDeDjCQxTrWHqUUi63oBvV7Mdm6WaobLbQ7gnPQ', decimals: 9 },
-};
-
-interface DriftPosition {
-  marketIndex: number;
-  symbol: string;
-  name: string;
-  mint: string;
-  balance: number;
-  decimals: number;
-  isDeposit: boolean;
-}
-
-// Fetch Drift protocol positions for a wallet
-// Currently disabled - the @drift-labs/sdk uses Node.js-only modules (node-cache)
-// that crash in browser builds. Drift positions should be tracked manually for now.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function fetchDriftPositions(_walletAddress: string): Promise<DriftPosition[]> {
-  // Drift SDK integration disabled - returns empty array
-  // To re-enable, would need to use a server-side API or find a browser-compatible approach
-  return [];
-}
 
 async function scanSolanaWallet(
   walletAddress: string,
