@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import type { Pool, HeldPosition, CalculatedMetrics, UnmappedPosition } from '../types/pool';
+import type { Pool, HeldPosition, CalculatedMetrics, UnmappedPosition, Deposit } from '../types/pool';
 import { addPositionToDb, removePositionFromDb, updatePositionInDb } from '../utils/heldPositions';
 import { getCachedData, getPoolMetrics, fetchPoolHistoryWithCache, isCacheValid } from '../utils/historicalData';
 import { fetchUnmappedPositions } from '../utils/unmappedPositions';
@@ -8,6 +8,7 @@ import { downloadPortfolioJson } from '../utils/exportPortfolio';
 import { formatTvl } from '../utils/filterPools';
 import { fetchAllUtilization } from '../utils/protocolUtilization';
 import { fetchCategories, type Category } from '../utils/categories';
+import { fetchDeposits } from '../utils/deposits';
 import { usePrices } from '../contexts/PriceContext';
 import { MetricInfo } from '../components/MetricInfo';
 import { PoolSearchInput } from '../components/PoolSearchInput';
@@ -17,6 +18,8 @@ import { WalletImportModal } from '../components/WalletImportModal';
 import { UnmappedPositionsList } from '../components/UnmappedPositionsList';
 import { CategoryManager } from '../components/CategoryManager';
 import { CategorySelector } from '../components/CategorySelector';
+import { DepositsCard } from '../components/DepositsCard';
+import { DepositsModal } from '../components/DepositsModal';
 
 interface PortfolioProps {
   positions: HeldPosition[];
@@ -78,6 +81,10 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
   // Wallet import state
   const [showWalletImport, setShowWalletImport] = useState(false);
   const [unmappedPositions, setUnmappedPositions] = useState<UnmappedPosition[]>([]);
+
+  // Deposits state
+  const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [showDepositsModal, setShowDepositsModal] = useState(false);
 
   // Category state
   const [categories, setCategories] = useState<Category[]>([]);
@@ -451,6 +458,20 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       setCategories(cats);
     } catch (err) {
       console.error('Failed to load categories:', err);
+    }
+  };
+
+  // Load deposits on mount
+  useEffect(() => {
+    loadDeposits();
+  }, []);
+
+  const loadDeposits = async () => {
+    try {
+      const deps = await fetchDeposits();
+      setDeposits(deps);
+    } catch (err) {
+      console.error('Failed to load deposits:', err);
     }
   };
 
@@ -1086,7 +1107,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       </div>
 
       {/* Summary Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 md:gap-4">
         <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
           <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
             Total Value
@@ -1094,6 +1115,11 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
           </div>
           <div className="text-lg md:text-2xl font-bold text-white">{formatCurrency(totalValue)}</div>
         </div>
+        <DepositsCard
+          deposits={deposits}
+          totalPortfolioValue={totalValue}
+          onEditClick={() => setShowDepositsModal(true)}
+        />
         <div className="group bg-slate-800 rounded-lg p-3 md:p-4">
           <div className="text-xs md:text-sm text-slate-400 mb-1 flex items-center">
             Weighted APY
@@ -1821,6 +1847,14 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
           onClose={() => setShowCategoryManager(false)}
         />
       )}
+
+      {/* Deposits Modal */}
+      <DepositsModal
+        isOpen={showDepositsModal}
+        onClose={() => setShowDepositsModal(false)}
+        deposits={deposits}
+        onDepositsChange={loadDeposits}
+      />
     </div>
   );
 }

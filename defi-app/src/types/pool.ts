@@ -151,6 +151,19 @@ export interface ScannedToken {
   usdValue: number | null;
 }
 
+// Fiat deposit tracking for P&L calculation
+export type DepositCurrency = 'USD' | 'GBP' | 'EUR';
+
+export interface Deposit {
+  id: string;
+  date: string;              // ISO date string (YYYY-MM-DD)
+  amount: number;            // Original amount in source currency
+  currency: DepositCurrency;
+  amountUsd: number;         // USD equivalent at time of deposit
+  exchangeRate: number;      // Exchange rate used (1 for USD)
+  createdAt: number;         // Timestamp when record was created
+}
+
 // Unmapped position (wallet token not yet linked to a pool)
 export interface UnmappedPosition {
   id: string;
