@@ -1,6 +1,7 @@
 import type { ScannedToken, TokenTransaction } from '../types/pool';
-import { Connection, PublicKey } from '@solana/web3.js';
-import { DriftClient, User, initialize, SpotBalanceType } from '@drift-labs/sdk';
+// Note: @drift-labs/sdk is installed but NOT imported here because it uses Node.js-only
+// modules (node-cache) that crash in browser builds. If Drift integration is needed,
+// use dynamic imports with try/catch. For now, Drift positions should be tracked manually.
 
 // Chain configurations for Alchemy API
 const CHAIN_CONFIG: Record<string, { alchemyNetwork: string; nativeSymbol: string; nativeName: string; coingeckoId: string }> = {
@@ -199,100 +200,14 @@ interface DriftPosition {
   isDeposit: boolean;
 }
 
-// Fetch Drift protocol positions for a wallet (currently disabled - see scanWallet comment)
-// Exported to avoid unused warning - can be used for manual testing
-export async function fetchDriftPositions(walletAddress: string): Promise<DriftPosition[]> {
-  const positions: DriftPosition[] = [];
-
-  try {
-    // Use public Solana RPC for Drift SDK (handles burst requests better than Alchemy free tier)
-    const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
-    const walletPubkey = new PublicKey(walletAddress);
-
-    // Initialize Drift SDK
-    initialize({ env: 'mainnet-beta' });
-
-    // Create a read-only Drift client
-    const driftClient = new DriftClient({
-      connection,
-      wallet: {
-        publicKey: walletPubkey,
-        signTransaction: async () => { throw new Error('Read-only'); },
-        signAllTransactions: async () => { throw new Error('Read-only'); },
-      },
-      env: 'mainnet-beta',
-      userStats: false,
-      activeSubAccountId: 0,
-      authority: walletPubkey,
-    });
-
-    await driftClient.subscribe();
-
-    // Get user account (subaccount 0 is default)
-    const userAccountPublicKey = await driftClient.getUserAccountPublicKey(0);
-    const userAccountExists = await connection.getAccountInfo(userAccountPublicKey);
-
-    if (!userAccountExists) {
-      await driftClient.unsubscribe();
-      return positions;
-    }
-
-    const user = new User({
-      driftClient,
-      userAccountPublicKey,
-    });
-
-    await user.subscribe();
-
-    // Get spot positions
-    const spotPositions = user.getUserAccount().spotPositions;
-
-    for (const position of spotPositions) {
-      const marketIndex = position.marketIndex;
-      const marketInfo = DRIFT_SPOT_MARKETS[marketIndex];
-
-      if (!marketInfo) continue;
-
-      // Get token amount (scaled balance)
-      const scaledBalance = position.scaledBalance.toNumber();
-      if (scaledBalance === 0) continue;
-
-      const isDeposit = position.balanceType === SpotBalanceType.DEPOSIT;
-
-      // Get the spot market to calculate actual token balance
-      const spotMarket = driftClient.getSpotMarketAccount(marketIndex);
-      if (!spotMarket) continue;
-
-      // Calculate actual token balance from scaled balance
-      let tokenBalance: number;
-      if (isDeposit) {
-        const cumulativeDepositInterest = spotMarket.cumulativeDepositInterest.toNumber() / 1e10;
-        tokenBalance = (scaledBalance * cumulativeDepositInterest) / Math.pow(10, marketInfo.decimals);
-      } else {
-        const cumulativeBorrowInterest = spotMarket.cumulativeBorrowInterest.toNumber() / 1e10;
-        tokenBalance = (scaledBalance * cumulativeBorrowInterest) / Math.pow(10, marketInfo.decimals);
-      }
-
-      if (tokenBalance > 0.000001) {
-        positions.push({
-          marketIndex,
-          symbol: marketInfo.symbol,
-          name: marketInfo.name,
-          mint: marketInfo.mint,
-          balance: tokenBalance,
-          decimals: marketInfo.decimals,
-          isDeposit,
-        });
-      }
-    }
-
-    await user.unsubscribe();
-    await driftClient.unsubscribe();
-  } catch (err) {
-    console.error('Error fetching Drift positions:', err);
-  }
-
-  return positions;
+// Fetch Drift protocol positions for a wallet
+// Currently disabled - the @drift-labs/sdk uses Node.js-only modules (node-cache)
+// that crash in browser builds. Drift positions should be tracked manually for now.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function fetchDriftPositions(_walletAddress: string): Promise<DriftPosition[]> {
+  // Drift SDK integration disabled - returns empty array
+  // To re-enable, would need to use a server-side API or find a browser-compatible approach
+  return [];
 }
 
 async function scanSolanaWallet(
