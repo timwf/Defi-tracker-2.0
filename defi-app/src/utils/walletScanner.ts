@@ -1159,7 +1159,7 @@ export async function getTokenEntryData(
   };
 }
 
-// Get ALL token transfers (deposits) - for yield tracking
+// Get ALL token transfers (deposits AND withdrawals) - for yield tracking
 export async function getAllTokenTransfers(
   walletAddress: string,
   tokenAddress: string,
@@ -1168,52 +1168,81 @@ export async function getAllTokenTransfers(
   transactions: TokenTransaction[];
   firstAcquiredAt: number;
   totalDeposited: number;
+  totalWithdrawn: number;
+  netDeposited: number;
 } | null> {
   if (!CHAIN_CONFIG[chain]) return null;
 
   try {
     const url = getAlchemyUrl(chain);
 
-    // Fetch ALL incoming transfers (deposits)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'alchemy_getAssetTransfers',
-        params: [{
-          fromBlock: '0x0',
-          toBlock: 'latest',
-          toAddress: walletAddress,
-          contractAddresses: [tokenAddress],
-          category: ['erc20'],
-          withMetadata: true,
-          order: 'asc', // Oldest first
-        }],
-        id: 1,
+    // Fetch incoming transfers (deposits) and outgoing transfers (withdrawals) in parallel
+    const [incomingResponse, outgoingResponse] = await Promise.all([
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'alchemy_getAssetTransfers',
+          params: [{
+            fromBlock: '0x0',
+            toBlock: 'latest',
+            toAddress: walletAddress,
+            contractAddresses: [tokenAddress],
+            category: ['erc20'],
+            withMetadata: true,
+            order: 'asc',
+          }],
+          id: 1,
+        }),
       }),
-    });
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'alchemy_getAssetTransfers',
+          params: [{
+            fromBlock: '0x0',
+            toBlock: 'latest',
+            fromAddress: walletAddress,
+            contractAddresses: [tokenAddress],
+            category: ['erc20'],
+            withMetadata: true,
+            order: 'asc',
+          }],
+          id: 2,
+        }),
+      }),
+    ]);
 
-    if (!response.ok) return null;
+    if (!incomingResponse.ok || !outgoingResponse.ok) return null;
 
-    const data = await response.json();
-    const transfers: AssetTransfer[] = data.result?.transfers || [];
+    const [incomingData, outgoingData] = await Promise.all([
+      incomingResponse.json(),
+      outgoingResponse.json(),
+    ]);
 
-    if (transfers.length === 0) return null;
+    const incomingTransfers: AssetTransfer[] = incomingData.result?.transfers || [];
+    const outgoingTransfers: AssetTransfer[] = outgoingData.result?.transfers || [];
 
-    // Build transaction list (no historical price fetching needed for stablecoin yield tracking)
+    if (incomingTransfers.length === 0 && outgoingTransfers.length === 0) return null;
+
+    // Build transaction list with both deposits and withdrawals
     const transactions: TokenTransaction[] = [];
     let totalDeposited = 0;
+    let totalWithdrawn = 0;
 
-    for (const transfer of transfers) {
+    // Add incoming transfers (deposits)
+    for (const transfer of incomingTransfers) {
       const timestamp = new Date(transfer.metadata.blockTimestamp).getTime();
       const amount = transfer.value ?? 0;
 
       transactions.push({
         timestamp,
         amount,
-        priceUsd: null, // Not needed for yield tracking
-        valueUsd: null, // Not needed for yield tracking
+        priceUsd: null,
+        valueUsd: null,
         type: 'deposit',
         txHash: transfer.hash,
       });
@@ -1221,12 +1250,34 @@ export async function getAllTokenTransfers(
       totalDeposited += amount;
     }
 
+    // Add outgoing transfers (withdrawals)
+    for (const transfer of outgoingTransfers) {
+      const timestamp = new Date(transfer.metadata.blockTimestamp).getTime();
+      const amount = transfer.value ?? 0;
+
+      transactions.push({
+        timestamp,
+        amount,
+        priceUsd: null,
+        valueUsd: null,
+        type: 'withdrawal',
+        txHash: transfer.hash,
+      });
+
+      totalWithdrawn += amount;
+    }
+
+    // Sort all transactions by timestamp (oldest first)
+    transactions.sort((a, b) => a.timestamp - b.timestamp);
+
     const firstAcquiredAt = transactions[0]?.timestamp ?? 0;
 
     return {
       transactions,
       firstAcquiredAt,
       totalDeposited,
+      totalWithdrawn,
+      netDeposited: totalDeposited - totalWithdrawn,
     };
   } catch (err) {
     console.error('Error fetching all transfers:', err);

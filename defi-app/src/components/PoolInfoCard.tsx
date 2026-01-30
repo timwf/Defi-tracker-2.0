@@ -721,26 +721,61 @@ export function PoolInfoCard({
               // Detect manual positions (no wallet/token tracking)
               const isManualPosition = position.source !== 'wallet' && !position.tokenAddress;
 
-              // Calculate deposited USD amount
+              // Calculate deposited USD amount, accounting for withdrawals
               const useApyForYield = position.useApyForYield || false;
               let depositedUsd: number | null = null;
+              let totalWithdrawnTokens = 0;
 
-              if (isManualPosition && position.initialAmountUsd) {
-                // Manual position: use initialAmountUsd directly
-                depositedUsd = position.initialAmountUsd;
-              } else if ((isShareBased && pool.stablecoin) || isPendlePT) {
-                // For share-based stablecoin vaults or Pendle PT: use actualDepositedUsd or initialTokenBalance
-                depositedUsd = position.actualDepositedUsd ?? (pool.stablecoin ? position.initialTokenBalance : null) ?? null;
-              } else if (pool.stablecoin && position.initialTokenBalance) {
-                // For stablecoin rebasing tokens: use initialTokenBalance as USD
-                depositedUsd = position.initialTokenBalance;
-              } else if (useApyForYield) {
-                // For non-stablecoin with APY mode: estimate from initialTokenBalance × current price
-                if (position.actualDepositedUsd) {
-                  depositedUsd = position.actualDepositedUsd;
-                } else if (position.initialTokenBalance && position.tokenBalance && position.tokenBalance > 0) {
-                  const currentPrice = position.amountUsd / position.tokenBalance;
-                  depositedUsd = position.initialTokenBalance * currentPrice;
+              // Calculate net deposited from transaction history if available
+              if (position.transactions && position.transactions.length > 0) {
+                let totalDepositedTokens = 0;
+                for (const tx of position.transactions) {
+                  if (tx.type === 'withdrawal') {
+                    totalWithdrawnTokens += tx.amount;
+                  } else {
+                    totalDepositedTokens += tx.amount;
+                  }
+                }
+                const netDepositedTokens = totalDepositedTokens - totalWithdrawnTokens;
+
+                if (isManualPosition && position.initialAmountUsd) {
+                  // Manual position: use initialAmountUsd directly (no withdrawal tracking)
+                  depositedUsd = position.initialAmountUsd;
+                } else if ((isShareBased && pool.stablecoin) || isPendlePT) {
+                  // For share-based stablecoin vaults or Pendle PT: use net deposited from transactions
+                  // or fall back to actualDepositedUsd
+                  if (position.actualDepositedUsd && totalWithdrawnTokens > 0) {
+                    // Adjust actualDepositedUsd proportionally for withdrawals
+                    const withdrawalRatio = totalWithdrawnTokens / totalDepositedTokens;
+                    depositedUsd = position.actualDepositedUsd * (1 - withdrawalRatio);
+                  } else {
+                    depositedUsd = position.actualDepositedUsd ?? (pool.stablecoin ? netDepositedTokens : null) ?? null;
+                  }
+                } else if (pool.stablecoin) {
+                  // For stablecoin rebasing tokens: use net deposited tokens as USD
+                  depositedUsd = netDepositedTokens;
+                } else if (useApyForYield) {
+                  // For non-stablecoin with APY mode: estimate from net deposited × current price
+                  if (position.tokenBalance && position.tokenBalance > 0) {
+                    const currentPrice = position.amountUsd / position.tokenBalance;
+                    depositedUsd = netDepositedTokens * currentPrice;
+                  }
+                }
+              } else {
+                // Fallback to old logic if no transactions available
+                if (isManualPosition && position.initialAmountUsd) {
+                  depositedUsd = position.initialAmountUsd;
+                } else if ((isShareBased && pool.stablecoin) || isPendlePT) {
+                  depositedUsd = position.actualDepositedUsd ?? (pool.stablecoin ? position.initialTokenBalance : null) ?? null;
+                } else if (pool.stablecoin && position.initialTokenBalance) {
+                  depositedUsd = position.initialTokenBalance;
+                } else if (useApyForYield) {
+                  if (position.actualDepositedUsd) {
+                    depositedUsd = position.actualDepositedUsd;
+                  } else if (position.initialTokenBalance && position.tokenBalance && position.tokenBalance > 0) {
+                    const currentPrice = position.amountUsd / position.tokenBalance;
+                    depositedUsd = position.initialTokenBalance * currentPrice;
+                  }
                 }
               }
 
@@ -761,9 +796,12 @@ export function PoolInfoCard({
                 (position.entryDate ? new Date(position.entryDate).getTime() : null);
 
               if (useApyForYield && position.transactions && position.transactions.length > 0) {
-                // Calculate yield per deposit based on when each was made
+                // Calculate yield per deposit based on when each was made (skip withdrawals)
                 const now = Date.now();
                 apyBasedYield = position.transactions.reduce((total, tx) => {
+                  // Only count deposits for APY-based yield, not withdrawals
+                  if (tx.type === 'withdrawal') return total;
+
                   const daysHeld = Math.floor((now - tx.timestamp) / (1000 * 60 * 60 * 24));
                   if (daysHeld > 0) {
                     // For non-stablecoins, estimate USD value using current price
@@ -787,9 +825,9 @@ export function PoolInfoCard({
               // Use APY-based yield if enabled or for manual positions, otherwise use tracking yield
               const yieldUsd = (useApyForYield || isManualPosition) && apyBasedYield !== null ? apyBasedYield : trackingYieldUsd;
 
-              // For rebasing tokens, yield = token difference
+              // For rebasing tokens, yield = current balance - net deposited (deposits - withdrawals)
               const yieldTokens = position.tokenBalance && position.initialTokenBalance
-                ? position.tokenBalance - position.initialTokenBalance
+                ? position.tokenBalance - position.initialTokenBalance + totalWithdrawnTokens
                 : null;
 
               // Calculate days held for display
@@ -962,53 +1000,87 @@ export function PoolInfoCard({
 
                   {/* Expandable Transaction History */}
                   {position.transactions && position.transactions.length > 0 && (
-                    <div className="mt-3">
-                      <button
-                        onClick={() => setShowTransactionHistory(!showTransactionHistory)}
-                        className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
-                      >
-                        {showTransactionHistory ? 'Hide' : 'Show'} Deposit History
-                        <svg
-                          className={`w-3 h-3 transition-transform ${showTransactionHistory ? 'rotate-180' : ''}`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
+                    (() => {
+                      const deposits = position.transactions.filter(tx => tx.type !== 'withdrawal');
+                      const withdrawals = position.transactions.filter(tx => tx.type === 'withdrawal');
+                      const totalDeposits = deposits.reduce((sum, tx) => sum + tx.amount, 0);
+                      const totalWithdrawals = withdrawals.reduce((sum, tx) => sum + tx.amount, 0);
+                      const netAmount = totalDeposits - totalWithdrawals;
 
-                      {showTransactionHistory && (
-                        <div className="mt-2 bg-slate-900/50 rounded-lg p-3">
-                          <div className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-2">Deposit History</div>
-                          <div className="space-y-2 max-h-48 overflow-y-auto">
-                            {position.transactions.map((tx, i) => (
-                              <div key={i} className="flex justify-between items-center text-xs border-b border-slate-700/50 pb-2">
-                                <div className="flex-1">
-                                  <div className="text-slate-400">{new Date(tx.timestamp).toLocaleDateString()}</div>
-                                  <div className="text-slate-500 text-[10px]">
-                                    {tx.txHash && (
-                                      <span className="font-mono">{tx.txHash.slice(0, 8)}...{tx.txHash.slice(-6)}</span>
-                                    )}
-                                  </div>
+                      return (
+                        <div className="mt-3">
+                          <button
+                            onClick={() => setShowTransactionHistory(!showTransactionHistory)}
+                            className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                          >
+                            {showTransactionHistory ? 'Hide' : 'Show'} Deposit History
+                            <svg
+                              className={`w-3 h-3 transition-transform ${showTransactionHistory ? 'rotate-180' : ''}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+
+                          {showTransactionHistory && (
+                            <div className="mt-2 bg-slate-900/50 rounded-lg p-3">
+                              <div className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-2">Transaction History</div>
+                              <div className="space-y-2 max-h-48 overflow-y-auto">
+                                {position.transactions.map((tx, i) => {
+                                  const isWithdrawal = tx.type === 'withdrawal';
+                                  return (
+                                    <div key={i} className="flex justify-between items-center text-xs border-b border-slate-700/50 pb-2">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${isWithdrawal ? 'bg-red-900/50 text-red-400' : 'bg-green-900/50 text-green-400'}`}>
+                                            {isWithdrawal ? 'OUT' : 'IN'}
+                                          </span>
+                                          <span className="text-slate-400">{new Date(tx.timestamp).toLocaleDateString()}</span>
+                                        </div>
+                                        <div className="text-slate-500 text-[10px] mt-0.5">
+                                          {tx.txHash && (
+                                            <span className="font-mono">{tx.txHash.slice(0, 8)}...{tx.txHash.slice(-6)}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className={isWithdrawal ? 'text-red-400' : 'text-green-400'}>
+                                          {isWithdrawal ? '-' : '+'}{tx.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {position.tokenSymbol}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="mt-2 pt-2 border-t border-slate-700 space-y-1 text-xs">
+                                <div className="flex justify-between">
+                                  <span className="text-slate-400">Total Deposited</span>
+                                  <span className="text-green-400 font-medium">
+                                    +{totalDeposits.toLocaleString(undefined, { maximumFractionDigits: 2 })} {position.tokenSymbol}
+                                  </span>
                                 </div>
-                                <div className="text-right">
-                                  <div className="text-slate-300">
-                                    +{tx.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {position.tokenSymbol}
+                                {totalWithdrawals > 0 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-400">Total Withdrawn</span>
+                                    <span className="text-red-400 font-medium">
+                                      -{totalWithdrawals.toLocaleString(undefined, { maximumFractionDigits: 2 })} {position.tokenSymbol}
+                                    </span>
                                   </div>
+                                )}
+                                <div className="flex justify-between pt-1 border-t border-slate-700/50">
+                                  <span className="text-slate-300">Net Deposited</span>
+                                  <span className="text-slate-100 font-medium">
+                                    {netAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {position.tokenSymbol}
+                                  </span>
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-slate-700 flex justify-between text-xs">
-                            <span className="text-slate-400">Total Deposited</span>
-                            <span className="text-slate-300 font-medium">
-                              {position.initialTokenBalance?.toLocaleString(undefined, { maximumFractionDigits: 2 })} {position.tokenSymbol}
-                            </span>
-                          </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                      );
+                    })()
                   )}
                 </div>
               );

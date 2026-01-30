@@ -313,25 +313,54 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
       const isPendlePT = pool.project === 'pendle' || position.tokenSymbol?.startsWith('PT-');
       const useApyForYield = position.useApyForYield || false;
 
-      // Calculate deposited amount
+      // Calculate deposited amount, accounting for withdrawals
       let depositedUsd: number | null = null;
+      let totalWithdrawnTokens = 0;
 
-      if (isManualPosition && position.initialAmountUsd) {
-        // Manual position: use initialAmountUsd directly
-        depositedUsd = position.initialAmountUsd;
-      } else if ((isShareBased && pool.stablecoin) || isPendlePT) {
-        depositedUsd = position.actualDepositedUsd ?? (pool.stablecoin ? position.initialTokenBalance : null) ?? null;
-      } else if (pool.stablecoin && position.initialTokenBalance) {
-        depositedUsd = position.initialTokenBalance;
-      } else if (useApyForYield) {
-        // For non-stablecoin with APY mode:
-        // Use actualDepositedUsd if tracked, otherwise estimate from initialTokenBalance × current price
-        if (position.actualDepositedUsd) {
-          depositedUsd = position.actualDepositedUsd;
-        } else if (position.initialTokenBalance && position.tokenBalance && position.tokenBalance > 0) {
-          // Estimate: initialTokens × (currentUsd / currentTokens)
-          const currentPrice = position.amountUsd / position.tokenBalance;
-          depositedUsd = position.initialTokenBalance * currentPrice;
+      // Calculate net deposited from transaction history if available
+      if (position.transactions && position.transactions.length > 0) {
+        let totalDepositedTokens = 0;
+        for (const tx of position.transactions) {
+          if (tx.type === 'withdrawal') {
+            totalWithdrawnTokens += tx.amount;
+          } else {
+            totalDepositedTokens += tx.amount;
+          }
+        }
+        const netDepositedTokens = totalDepositedTokens - totalWithdrawnTokens;
+
+        if (isManualPosition && position.initialAmountUsd) {
+          depositedUsd = position.initialAmountUsd;
+        } else if ((isShareBased && pool.stablecoin) || isPendlePT) {
+          if (position.actualDepositedUsd && totalWithdrawnTokens > 0) {
+            const withdrawalRatio = totalWithdrawnTokens / totalDepositedTokens;
+            depositedUsd = position.actualDepositedUsd * (1 - withdrawalRatio);
+          } else {
+            depositedUsd = position.actualDepositedUsd ?? (pool.stablecoin ? netDepositedTokens : null) ?? null;
+          }
+        } else if (pool.stablecoin) {
+          depositedUsd = netDepositedTokens;
+        } else if (useApyForYield) {
+          if (position.tokenBalance && position.tokenBalance > 0) {
+            const currentPrice = position.amountUsd / position.tokenBalance;
+            depositedUsd = netDepositedTokens * currentPrice;
+          }
+        }
+      } else {
+        // Fallback to old logic if no transactions available
+        if (isManualPosition && position.initialAmountUsd) {
+          depositedUsd = position.initialAmountUsd;
+        } else if ((isShareBased && pool.stablecoin) || isPendlePT) {
+          depositedUsd = position.actualDepositedUsd ?? (pool.stablecoin ? position.initialTokenBalance : null) ?? null;
+        } else if (pool.stablecoin && position.initialTokenBalance) {
+          depositedUsd = position.initialTokenBalance;
+        } else if (useApyForYield) {
+          if (position.actualDepositedUsd) {
+            depositedUsd = position.actualDepositedUsd;
+          } else if (position.initialTokenBalance && position.tokenBalance && position.tokenBalance > 0) {
+            const currentPrice = position.amountUsd / position.tokenBalance;
+            depositedUsd = position.initialTokenBalance * currentPrice;
+          }
         }
       }
 
@@ -352,9 +381,12 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
         (position.entryDate ? new Date(position.entryDate).getTime() : null);
 
       if (useApyForYield && position.transactions && position.transactions.length > 0) {
-        // Calculate yield per deposit based on when each was made
+        // Calculate yield per deposit based on when each was made (skip withdrawals)
         const now = Date.now();
         apyBasedYield = position.transactions.reduce((total, tx) => {
+          // Only count deposits for APY-based yield, not withdrawals
+          if (tx.type === 'withdrawal') return total;
+
           const daysHeld = Math.floor((now - tx.timestamp) / (1000 * 60 * 60 * 24));
           if (daysHeld > 0) {
             // For non-stablecoins, estimate USD value using current price
