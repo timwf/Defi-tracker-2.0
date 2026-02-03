@@ -1088,7 +1088,43 @@ export function PoolInfoCard({
                                 {/* ETH Cost Basis for LSTs */}
                                 {position.tokenAddress && isEthDenominatedToken(position.tokenAddress) && (
                                   <div className="mt-3 pt-2 border-t border-slate-700/50">
-                                    <div className="text-slate-500 font-medium uppercase tracking-wide mb-2">Cost Basis</div>
+                                    <div className="flex justify-between items-center mb-2">
+                                      <span className="text-slate-500 font-medium uppercase tracking-wide">Cost Basis</span>
+                                      {position.avgEntryPriceEth && position.avgEthCostUsd && (
+                                        <button
+                                          onClick={async () => {
+                                            if (!position.transactions || !position.tokenAddress || !onUpdatePosition) return;
+                                            setIsFetchingCostBasis(true);
+                                            try {
+                                              const chain = pool.chain || 'Ethereum';
+                                              const result = await fetchTransactionCostBasis(
+                                                position.transactions,
+                                                position.tokenAddress,
+                                                chain
+                                              );
+                                              await onUpdatePosition(position.poolId, {
+                                                transactions: result.transactionsWithPrices,
+                                                totalCostBasis: result.totalCostBasis,
+                                                avgEntryPrice: result.avgEntryPrice ?? undefined,
+                                                avgEntryPriceEth: result.avgEntryPriceEth ?? undefined,
+                                                avgEthCostUsd: result.avgEthCostUsd ?? undefined,
+                                              });
+                                            } catch (err) {
+                                              console.error('Error refreshing cost basis:', err);
+                                            } finally {
+                                              setIsFetchingCostBasis(false);
+                                            }
+                                          }}
+                                          disabled={isFetchingCostBasis}
+                                          className="text-slate-500 hover:text-cyan-400 disabled:opacity-50"
+                                          title="Refresh cost basis"
+                                        >
+                                          <svg className={`w-3 h-3 ${isFetchingCostBasis ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                          </svg>
+                                        </button>
+                                      )}
+                                    </div>
                                     {position.avgEntryPriceEth && position.avgEthCostUsd ? (
                                       <div className="space-y-1">
                                         <div className="flex justify-between">
