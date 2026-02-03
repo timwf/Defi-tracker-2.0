@@ -103,6 +103,9 @@ export interface TokenTransaction {
   valueUsd: number | null; // amount * priceUsd
   type: 'deposit' | 'withdrawal';
   txHash?: string;
+  // ETH-denominated cost basis (for LSTs like wstETH, cbETH, rETH)
+  priceEth?: number | null;    // token price in ETH (e.g., 1.15 ETH per wstETH)
+  ethPriceUsd?: number | null; // ETH price in USD at time of transaction
 }
 
 // User's held positions
@@ -127,6 +130,9 @@ export interface HeldPosition {
   transactions?: TokenTransaction[];
   totalCostBasis?: number;      // sum of all deposit values
   avgEntryPrice?: number;       // totalCostBasis / total tokens deposited
+  // ETH-denominated cost basis (for LSTs like wstETH, cbETH, rETH)
+  avgEntryPriceEth?: number;    // weighted avg ETH per token at entry (e.g., 1.15 ETH/wstETH)
+  avgEthCostUsd?: number;       // weighted avg ETH/USD price at entry (e.g., $3400)
   // ERC-4626 vault settings
   isShareBased?: boolean;       // User override: treat as share-based vault (use convertToAssets)
   underlyingValue?: number;     // Cached underlying value from convertToAssets
