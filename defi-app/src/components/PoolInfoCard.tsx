@@ -1033,6 +1033,7 @@ export function PoolInfoCard({
                               <div className="space-y-2 max-h-48 overflow-y-auto">
                                 {position.transactions.map((tx, i) => {
                                   const isWithdrawal = tx.type === 'withdrawal';
+                                  const hasEthPrice = tx.ethPriceUsd && !isWithdrawal;
                                   return (
                                     <div key={i} className="flex justify-between items-center text-xs border-b border-slate-700/50 pb-2">
                                       <div className="flex-1">
@@ -1052,6 +1053,11 @@ export function PoolInfoCard({
                                         <div className={isWithdrawal ? 'text-red-400' : 'text-green-400'}>
                                           {isWithdrawal ? '-' : '+'}{tx.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {position.tokenSymbol}
                                         </div>
+                                        {hasEthPrice && (
+                                          <div className="text-yellow-400/70 text-[10px]">
+                                            @ ETH ${tx.ethPriceUsd!.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   );
