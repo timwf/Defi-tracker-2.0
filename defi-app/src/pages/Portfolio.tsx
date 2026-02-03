@@ -1055,6 +1055,14 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
     }
   };
 
+  // Handler for updating position data (e.g., cost basis)
+  const handleUpdatePosition = async (poolId: string, updates: Partial<HeldPosition>) => {
+    await updatePositionInDb(poolId, updates);
+    if (onRefreshPositions) {
+      await onRefreshPositions();
+    }
+  };
+
   const formatCurrency = (value: number) => {
     if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
     if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
@@ -1586,6 +1594,7 @@ export function Portfolio({ positions, pools, onRefreshPositions }: PortfolioPro
                         isRefreshing={refreshingPoolId === position.poolId}
                         protocolUtilization={utilizationData.get(position.poolId)}
                         category={categories.find(c => c.id === position.categoryId)}
+                        onUpdatePosition={handleUpdatePosition}
                       />
                     )}
                   </div>

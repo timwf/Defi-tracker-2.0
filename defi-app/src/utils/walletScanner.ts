@@ -41,6 +41,19 @@ const DEFILLAMA_CHAINS: Record<string, string> = {
   'Solana': 'solana',
 };
 
+// WETH address for ETH price lookups (used for LST cost basis in ETH terms)
+const WETH_ADDRESS = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
+
+// Known LST tokens that should have ETH-denominated cost basis
+const ETH_DENOMINATED_TOKENS: Record<string, boolean> = {
+  '0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0': true, // wstETH
+  '0xae78736cd615f374d3085123a210448e74fc6393': true, // rETH
+  '0xbe9895146f7af43049ca1c1ae358b0541ea49704': true, // cbETH
+  '0xf951e335afb289353dc249e82926178eac7ded78': true, // swETH
+  '0xa35b1b31ce002fbf2058d22f30f95d405200a15b': true, // ETHx
+  '0xac3e018457b222d93114458476f3e3416abbe38f': true, // sfrxETH
+};
+
 // Solana configuration
 const SOLANA_CONFIG = {
   network: 'solana-mainnet',
@@ -1130,6 +1143,54 @@ export async function fetchHistoricalPrice(
   }
 }
 
+// Check if a token should have ETH-denominated cost basis (LSTs)
+export function isEthDenominatedToken(tokenAddress: string): boolean {
+  return ETH_DENOMINATED_TOKENS[tokenAddress.toLowerCase()] ?? false;
+}
+
+// Fetch historical price with ETH comparison (for LST cost basis)
+export async function fetchHistoricalPriceWithEth(
+  tokenAddress: string,
+  chain: string,
+  timestamp: number
+): Promise<{
+  priceUsd: number | null;
+  priceEth: number | null;
+  ethPriceUsd: number | null;
+}> {
+  const llamaChain = DEFILLAMA_CHAINS[chain];
+  if (!llamaChain) return { priceUsd: null, priceEth: null, ethPriceUsd: null };
+
+  const timestampSeconds = Math.floor(timestamp / 1000);
+  const tokenCoin = `${llamaChain}:${tokenAddress.toLowerCase()}`;
+  const ethCoin = `ethereum:${WETH_ADDRESS}`;
+
+  try {
+    // Fetch both token price and ETH price in one request
+    const response = await fetch(
+      `https://coins.llama.fi/prices/historical/${timestampSeconds}/${tokenCoin},${ethCoin}`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+
+    if (!response.ok) return { priceUsd: null, priceEth: null, ethPriceUsd: null };
+
+    const data = await response.json();
+    const tokenPrice = data.coins?.[tokenCoin]?.price;
+    const ethPrice = data.coins?.[ethCoin]?.price;
+
+    const priceUsd = typeof tokenPrice === 'number' ? tokenPrice : null;
+    const ethPriceUsd = typeof ethPrice === 'number' ? ethPrice : null;
+
+    // Calculate token price in ETH terms
+    const priceEth = priceUsd && ethPriceUsd ? priceUsd / ethPriceUsd : null;
+
+    return { priceUsd, priceEth, ethPriceUsd };
+  } catch (err) {
+    console.error('Error fetching historical price with ETH:', err);
+    return { priceUsd: null, priceEth: null, ethPriceUsd: null };
+  }
+}
+
 // Get entry data for a token (first transfer date, price at that time)
 export async function getTokenEntryData(
   walletAddress: string,
@@ -1283,6 +1344,90 @@ export async function getAllTokenTransfers(
     console.error('Error fetching all transfers:', err);
     return null;
   }
+}
+
+// Fetch historical prices for all deposit transactions and calculate cost basis
+export async function fetchTransactionCostBasis(
+  transactions: TokenTransaction[],
+  tokenAddress: string,
+  chain: string
+): Promise<{
+  transactionsWithPrices: TokenTransaction[];
+  totalCostBasis: number;
+  avgEntryPrice: number | null;
+  avgEntryPriceEth: number | null;
+  avgEthCostUsd: number | null;
+}> {
+  const isEthDenominated = isEthDenominatedToken(tokenAddress);
+  const deposits = transactions.filter(t => t.type === 'deposit');
+
+  // Fetch prices for all deposits (in batches to avoid rate limiting)
+  const transactionsWithPrices: TokenTransaction[] = [...transactions];
+  let totalCostBasis = 0;
+  let totalDepositedTokens = 0;
+  let weightedEthSum = 0;      // sum of (amount * priceEth) for ETH average
+  let weightedEthUsdSum = 0;   // sum of (amount * ethPriceUsd) for ETH USD average
+
+  // Process deposits in batches of 5 to avoid rate limiting
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < deposits.length; i += BATCH_SIZE) {
+    const batch = deposits.slice(i, i + BATCH_SIZE);
+
+    const pricePromises = batch.map(async (deposit) => {
+      if (isEthDenominated) {
+        return fetchHistoricalPriceWithEth(tokenAddress, chain, deposit.timestamp);
+      } else {
+        const priceUsd = await fetchHistoricalPrice(tokenAddress, chain, deposit.timestamp);
+        return { priceUsd, priceEth: null, ethPriceUsd: null };
+      }
+    });
+
+    const prices = await Promise.all(pricePromises);
+
+    // Update transactions with prices
+    batch.forEach((deposit, idx) => {
+      const txIndex = transactionsWithPrices.findIndex(
+        t => t.txHash === deposit.txHash && t.timestamp === deposit.timestamp
+      );
+      if (txIndex !== -1) {
+        const { priceUsd, priceEth, ethPriceUsd } = prices[idx];
+        transactionsWithPrices[txIndex] = {
+          ...transactionsWithPrices[txIndex],
+          priceUsd,
+          valueUsd: priceUsd ? deposit.amount * priceUsd : null,
+          priceEth,
+          ethPriceUsd,
+        };
+
+        // Accumulate for averages
+        if (priceUsd) {
+          totalCostBasis += deposit.amount * priceUsd;
+          totalDepositedTokens += deposit.amount;
+        }
+        if (priceEth && ethPriceUsd) {
+          weightedEthSum += deposit.amount * priceEth;
+          weightedEthUsdSum += deposit.amount * ethPriceUsd;
+        }
+      }
+    });
+
+    // Small delay between batches to be nice to the API
+    if (i + BATCH_SIZE < deposits.length) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  }
+
+  return {
+    transactionsWithPrices,
+    totalCostBasis,
+    avgEntryPrice: totalDepositedTokens > 0 ? totalCostBasis / totalDepositedTokens : null,
+    avgEntryPriceEth: totalDepositedTokens > 0 && weightedEthSum > 0
+      ? weightedEthSum / totalDepositedTokens
+      : null,
+    avgEthCostUsd: totalDepositedTokens > 0 && weightedEthUsdSum > 0
+      ? weightedEthUsdSum / totalDepositedTokens
+      : null,
+  };
 }
 
 // Refresh a single token's balance and price
