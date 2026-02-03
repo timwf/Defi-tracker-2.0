@@ -1109,22 +1109,34 @@ export function PoolInfoCard({
                                     ) : (
                                       <button
                                         onClick={async () => {
-                                          if (!position.transactions || !position.tokenAddress || !onUpdatePosition) return;
+                                          if (!position.transactions || !position.tokenAddress || !onUpdatePosition) {
+                                            console.log('Missing data:', {
+                                              transactions: !!position.transactions,
+                                              tokenAddress: position.tokenAddress,
+                                              onUpdatePosition: !!onUpdatePosition
+                                            });
+                                            return;
+                                          }
                                           setIsFetchingCostBasis(true);
                                           try {
                                             const chain = pool.chain || 'Ethereum';
+                                            console.log('Fetching cost basis for', position.tokenAddress, 'on', chain);
                                             const result = await fetchTransactionCostBasis(
                                               position.transactions,
                                               position.tokenAddress,
                                               chain
                                             );
-                                            await onUpdatePosition(position.poolId, {
+                                            console.log('Cost basis result:', result);
+                                            const updates = {
                                               transactions: result.transactionsWithPrices,
                                               totalCostBasis: result.totalCostBasis,
                                               avgEntryPrice: result.avgEntryPrice ?? undefined,
                                               avgEntryPriceEth: result.avgEntryPriceEth ?? undefined,
                                               avgEthCostUsd: result.avgEthCostUsd ?? undefined,
-                                            });
+                                            };
+                                            console.log('Saving updates:', updates);
+                                            await onUpdatePosition(position.poolId, updates);
+                                            console.log('Updates saved successfully');
                                           } catch (err) {
                                             console.error('Error fetching cost basis:', err);
                                           } finally {
