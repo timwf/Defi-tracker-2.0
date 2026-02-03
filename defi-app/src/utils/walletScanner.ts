@@ -1360,6 +1360,13 @@ export async function fetchTransactionCostBasis(
 }> {
   const isEthDenominated = isEthDenominatedToken(tokenAddress);
   const deposits = transactions.filter(t => t.type === 'deposit');
+  console.log('fetchTransactionCostBasis:', {
+    tokenAddress,
+    chain,
+    isEthDenominated,
+    totalTransactions: transactions.length,
+    deposits: deposits.length
+  });
 
   // Fetch prices for all deposits (in batches to avoid rate limiting)
   const transactionsWithPrices: TokenTransaction[] = [...transactions];
