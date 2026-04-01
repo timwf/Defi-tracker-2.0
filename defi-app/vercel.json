@@ -1,5 +1,9 @@
 {
   "rewrites": [
+    { "source": "/api/llama/pools", "destination": "https://yields.llama.fi/pools" },
+    { "source": "/api/llama/poolsBorrow", "destination": "https://yields.llama.fi/poolsBorrow" },
+    { "source": "/api/llama/chart/:path*", "destination": "https://yields.llama.fi/chart/:path*" },
+    { "source": "/api/llama/prices/:path*", "destination": "https://coins.llama.fi/prices/:path*" },
     { "source": "/(.*)", "destination": "/" }
   ]
 }

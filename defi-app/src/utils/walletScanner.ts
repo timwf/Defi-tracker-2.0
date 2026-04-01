@@ -167,7 +167,7 @@ async function fetchSolPrice(): Promise<number | null> {
 
   try {
     const response = await fetch(
-      'https://coins.llama.fi/prices/current/coingecko:solana',
+      '/api/llama/prices/current/coingecko:solana',
       { headers: { 'Accept': 'application/json' } }
     );
 
@@ -382,7 +382,7 @@ async function fetchTokenPrices(
 
   try {
     const response = await fetch(
-      `https://coins.llama.fi/prices/current/${coins}`,
+      `/api/llama/prices/current/${coins}`,
       { headers: { 'Accept': 'application/json' } }
     );
 
@@ -431,7 +431,7 @@ async function fetchNativePrice(chain: string): Promise<number | null> {
 
   try {
     const response = await fetch(
-      `https://coins.llama.fi/prices/current/${coin}`,
+      `/api/llama/prices/current/${coin}`,
       { headers: { 'Accept': 'application/json' } }
     );
 
@@ -478,7 +478,7 @@ export async function fetchUnderlyingTokenPrices(
 
   try {
     const response = await fetch(
-      `https://coins.llama.fi/prices/current/${coins}`,
+      `/api/llama/prices/current/${coins}`,
       { headers: { 'Accept': 'application/json' } }
     );
 
@@ -1127,7 +1127,7 @@ export async function fetchHistoricalPrice(
 
   try {
     const response = await fetch(
-      `https://coins.llama.fi/prices/historical/${timestampSeconds}/${coin}`,
+      `/api/llama/prices/historical/${timestampSeconds}/${coin}`,
       { headers: { 'Accept': 'application/json' } }
     );
 
@@ -1168,7 +1168,7 @@ export async function fetchHistoricalPriceWithEth(
   try {
     // Fetch both token price and ETH price in one request
     const response = await fetch(
-      `https://coins.llama.fi/prices/historical/${timestampSeconds}/${tokenCoin},${ethCoin}`,
+      `/api/llama/prices/historical/${timestampSeconds}/${tokenCoin},${ethCoin}`,
       { headers: { 'Accept': 'application/json' } }
     );
 

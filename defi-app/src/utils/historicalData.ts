@@ -119,7 +119,7 @@ export function getCacheAge(poolId: string): string {
 
 // Fetch historical data for a single pool
 export async function fetchPoolHistory(poolId: string): Promise<HistoricalDataPoint[]> {
-  const response = await fetch(`https://yields.llama.fi/chart/${poolId}`);
+  const response = await fetch(`/api/llama/chart/${poolId}`);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
   const result = await response.json();

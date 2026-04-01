@@ -120,8 +120,8 @@ function AppContent() {
     try {
       // Fetch both pools and borrow data in parallel
       const [poolsResponse, borrowResponse] = await Promise.all([
-        fetch('https://yields.llama.fi/pools'),
-        fetch('https://yields.llama.fi/poolsBorrow'),
+        fetch('/api/llama/pools'),
+        fetch('/api/llama/poolsBorrow'),
       ]);
 
       if (!poolsResponse.ok) throw new Error(`HTTP ${poolsResponse.status}`);
